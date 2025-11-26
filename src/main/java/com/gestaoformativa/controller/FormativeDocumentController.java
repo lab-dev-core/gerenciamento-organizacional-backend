@@ -25,8 +25,18 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 @RestController
 @RequestMapping("/api/documents")
+@Tag(name = "Documentos Formativos", description = "Gerenciamento de documentos formativos")
+@SecurityRequirement(name = "bearer-jwt")
 public class FormativeDocumentController {
 
     @Autowired
@@ -41,6 +51,8 @@ public class FormativeDocumentController {
     @Autowired
     private MissionLocationService locationService;
 
+    @Operation(summary = "Listar documentos acessíveis", description = "Retorna todos os documentos que o usuário pode acessar")
+    @ApiResponse(responseCode = "200", description = "Documentos listados com sucesso")
     @GetMapping
     public ResponseEntity<List<DocumentDTO>> getAccessibleDocuments(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -53,6 +65,12 @@ public class FormativeDocumentController {
         return ResponseEntity.ok(documentDTOs);
     }
 
+    @Operation(summary = "Obter documento por ID", description = "Retorna um documento específico pelo seu ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Documento encontrado"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado ao documento"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<DocumentDTO> getDocumentById(@PathVariable Long id,
                                                        @AuthenticationPrincipal UserDetails userDetails) {
@@ -66,6 +84,11 @@ public class FormativeDocumentController {
         return ResponseEntity.ok(convertToDTO(document));
     }
 
+    @Operation(summary = "Criar documento", description = "Cria um novo documento formativo")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Documento criado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar documentos")
+    })
     @PostMapping
     public ResponseEntity<DocumentDTO> createDocument(@Valid @RequestBody DocumentDTO documentDTO,
                                                       @AuthenticationPrincipal UserDetails userDetails) {
@@ -81,6 +104,12 @@ public class FormativeDocumentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(convertToDTO(savedDocument));
     }
 
+    @Operation(summary = "Atualizar documento", description = "Atualiza um documento existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Documento atualizado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<DocumentDTO> updateDocument(@PathVariable Long id,
                                                       @Valid @RequestBody DocumentDTO documentDTO,
@@ -99,6 +128,12 @@ public class FormativeDocumentController {
         return ResponseEntity.ok(convertToDTO(updatedDocument));
     }
 
+    @Operation(summary = "Excluir documento", description = "Exclui um documento existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Documento excluído com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteDocument(@PathVariable Long id,
                                                @AuthenticationPrincipal UserDetails userDetails) {
@@ -113,6 +148,13 @@ public class FormativeDocumentController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Upload de anexo", description = "Faz upload de um anexo para o documento")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Anexo adicionado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado"),
+            @ApiResponse(responseCode = "500", description = "Erro no upload do arquivo")
+    })
     @PostMapping("/{id}/attachment")
     public ResponseEntity<DocumentDTO> uploadAttachment(@PathVariable Long id,
                                                         @RequestParam("file") MultipartFile file,
@@ -136,6 +178,11 @@ public class FormativeDocumentController {
         }
     }
 
+    @Operation(summary = "Documentos por estágio", description = "Retorna documentos associados a um estágio de vida")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Documentos listados com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Estágio inválido")
+    })
     @GetMapping("/by-stage/{stageName}")
     public ResponseEntity<List<DocumentDTO>> getDocumentsByStage(@PathVariable String stageName,
                                                                  @AuthenticationPrincipal UserDetails userDetails) {
@@ -145,7 +192,6 @@ public class FormativeDocumentController {
             User.LifeStage stage = User.LifeStage.valueOf(stageName);
             List<FormativeDocument> documents = documentService.getDocumentsForStage(stage);
 
-            // Filtrar apenas os documentos que o usuário pode acessar
             List<DocumentDTO> accessibleDocuments = documents.stream()
                     .filter(currentUser::canAccessDocument)
                     .map(this::convertToDTO)
@@ -157,6 +203,11 @@ public class FormativeDocumentController {
         }
     }
 
+    @Operation(summary = "Documentos por localização", description = "Retorna documentos associados a uma localização")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Documentos listados com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Localização não encontrada")
+    })
     @GetMapping("/by-location/{locationId}")
     public ResponseEntity<List<DocumentDTO>> getDocumentsByLocation(@PathVariable Long locationId,
                                                                     @AuthenticationPrincipal UserDetails userDetails) {
@@ -166,7 +217,6 @@ public class FormativeDocumentController {
             MissionLocation location = locationService.getLocationById(locationId);
             List<FormativeDocument> documents = documentService.getDocumentsForLocation(location);
 
-            // Filtrar apenas os documentos que o usuário pode acessar
             List<DocumentDTO> accessibleDocuments = documents.stream()
                     .filter(currentUser::canAccessDocument)
                     .map(this::convertToDTO)
@@ -178,6 +228,12 @@ public class FormativeDocumentController {
         }
     }
 
+    @Operation(summary = "Conceder acesso a usuário", description = "Concede acesso a um documento para um usuário específico")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Acesso concedido com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Documento ou usuário não encontrado")
+    })
     @PostMapping("/{documentId}/access/user/{userId}")
     public ResponseEntity<DocumentDTO> grantAccessToUser(@PathVariable Long documentId,
                                                          @PathVariable Long userId,
@@ -206,6 +262,7 @@ public class FormativeDocumentController {
         dto.setKeywords(document.getKeywords());
         dto.setDocumentType(document.getDocumentType());
         dto.setAccessLevel(document.getAccessLevel());
+        // Preencher outros campos necessários
         return dto;
     }
 

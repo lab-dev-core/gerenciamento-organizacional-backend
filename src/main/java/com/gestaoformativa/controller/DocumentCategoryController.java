@@ -17,8 +17,18 @@ import javax.validation.Valid;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 @RestController
 @RequestMapping("/api/categories")
+@Tag(name = "Categorias de Documentos", description = "Gerenciamento de categorias de documentos")
+@SecurityRequirement(name = "bearer-jwt")
 public class DocumentCategoryController {
 
     @Autowired
@@ -27,7 +37,11 @@ public class DocumentCategoryController {
     @Autowired
     private UserService userService;
 
-    // Obter todas as categorias
+    @Operation(summary = "Listar todas as categorias", description = "Retorna todas as categorias de documentos")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Categorias listadas com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado")
+    })
     @GetMapping
     public ResponseEntity<List<CategoryDTO>> getAllCategories() {
         List<DocumentCategory> categories = categoryService.getAllCategories();
@@ -39,7 +53,10 @@ public class DocumentCategoryController {
         return ResponseEntity.ok(categoryDTOs);
     }
 
-    // Obter categorias de nível superior (raiz)
+    @Operation(summary = "Obter categorias raiz", description = "Retorna apenas categorias de nível superior (sem pai)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Categorias raiz listadas com sucesso")
+    })
     @GetMapping("/root")
     public ResponseEntity<List<CategoryDTO>> getRootCategories() {
         List<DocumentCategory> rootCategories = categoryService.getRootCategories();
@@ -51,7 +68,11 @@ public class DocumentCategoryController {
         return ResponseEntity.ok(categoryDTOs);
     }
 
-    // Obter uma categoria específica por ID
+    @Operation(summary = "Obter categoria por ID", description = "Retorna uma categoria específica pelo seu ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Categoria encontrada"),
+            @ApiResponse(responseCode = "404", description = "Categoria não encontrada")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<CategoryDTO> getCategoryById(@PathVariable Long id) {
         try {
@@ -62,7 +83,11 @@ public class DocumentCategoryController {
         }
     }
 
-    // Obter subcategorias de uma categoria
+    @Operation(summary = "Obter subcategorias", description = "Retorna todas as subcategorias de uma categoria pai")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Subcategorias listadas com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Categoria pai não encontrada")
+    })
     @GetMapping("/{id}/subcategories")
     public ResponseEntity<List<CategoryDTO>> getSubcategories(@PathVariable Long id) {
         try {
@@ -78,20 +103,23 @@ public class DocumentCategoryController {
         }
     }
 
-    // Criar uma nova categoria
+    @Operation(summary = "Criar nova categoria", description = "Cria uma nova categoria de documento")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Categoria criada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar documentos")
+    })
     @PostMapping
     public ResponseEntity<CategoryDTO> createCategory(@Valid @RequestBody CategoryDTO categoryDTO,
                                                       @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar documentos
         if (!currentUser.hasPermission("documents")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         DocumentCategory category = convertToEntity(categoryDTO);
 
-        // Verificar se existe uma categoria pai
         if (categoryDTO.getParentCategoryId() != null) {
             try {
                 DocumentCategory parentCategory = categoryService.getCategoryById(categoryDTO.getParentCategoryId());
@@ -105,14 +133,19 @@ public class DocumentCategoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(convertToDTO(savedCategory));
     }
 
-    // Atualizar uma categoria existente
+    @Operation(summary = "Atualizar categoria", description = "Atualiza uma categoria existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Categoria atualizada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar documentos"),
+            @ApiResponse(responseCode = "404", description = "Categoria não encontrada")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<CategoryDTO> updateCategory(@PathVariable Long id,
                                                       @Valid @RequestBody CategoryDTO categoryDTO,
                                                       @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar documentos
         if (!currentUser.hasPermission("documents")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -120,7 +153,6 @@ public class DocumentCategoryController {
         try {
             DocumentCategory category = convertToEntity(categoryDTO);
 
-            // Verificar se existe uma categoria pai
             if (categoryDTO.getParentCategoryId() != null) {
                 try {
                     DocumentCategory parentCategory = categoryService.getCategoryById(categoryDTO.getParentCategoryId());
@@ -139,13 +171,18 @@ public class DocumentCategoryController {
         }
     }
 
-    // Excluir uma categoria
+    @Operation(summary = "Excluir categoria", description = "Exclui uma categoria existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Categoria excluída com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar documentos"),
+            @ApiResponse(responseCode = "404", description = "Categoria não encontrada"),
+            @ApiResponse(responseCode = "409", description = "Conflito - categoria não pode ser excluída")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCategory(@PathVariable Long id,
                                                @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar documentos
         if (!currentUser.hasPermission("documents")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -160,14 +197,18 @@ public class DocumentCategoryController {
         }
     }
 
-    // Adicionar um documento a uma categoria
+    @Operation(summary = "Adicionar documento à categoria", description = "Associa um documento a uma categoria")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Documento adicionado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar documentos"),
+            @ApiResponse(responseCode = "404", description = "Categoria ou documento não encontrado")
+    })
     @PostMapping("/{categoryId}/documents/{documentId}")
     public ResponseEntity<CategoryDTO> addDocumentToCategory(@PathVariable Long categoryId,
                                                              @PathVariable Long documentId,
                                                              @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar documentos
         if (!currentUser.hasPermission("documents")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -180,14 +221,18 @@ public class DocumentCategoryController {
         }
     }
 
-    // Remover um documento de uma categoria
+    @Operation(summary = "Remover documento da categoria", description = "Remove a associação de um documento com uma categoria")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Documento removido com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar documentos"),
+            @ApiResponse(responseCode = "404", description = "Categoria ou documento não encontrado")
+    })
     @DeleteMapping("/{categoryId}/documents/{documentId}")
     public ResponseEntity<CategoryDTO> removeDocumentFromCategory(@PathVariable Long categoryId,
                                                                   @PathVariable Long documentId,
                                                                   @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar documentos
         if (!currentUser.hasPermission("documents")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -200,18 +245,22 @@ public class DocumentCategoryController {
         }
     }
 
-    // Métodos auxiliares
     private CategoryDTO convertToDTO(DocumentCategory category) {
         CategoryDTO dto = new CategoryDTO();
-        // Preencher o DTO com os dados da categoria
-        // ...
+        dto.setId(category.getId());
+        dto.setName(category.getName());
+        dto.setDescription(category.getDescription());
+        if (category.getParentCategory() != null) {
+            dto.setParentCategoryId(category.getParentCategory().getId());
+        }
         return dto;
     }
 
     private DocumentCategory convertToEntity(CategoryDTO dto) {
         DocumentCategory category = new DocumentCategory();
-        // Preencher a entidade com os dados do DTO
-        // ...
+        category.setId(dto.getId());
+        category.setName(dto.getName());
+        category.setDescription(dto.getDescription());
         return category;
     }
 }

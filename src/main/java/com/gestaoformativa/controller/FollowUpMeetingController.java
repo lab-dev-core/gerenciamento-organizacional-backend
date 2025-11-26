@@ -23,8 +23,19 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 @RestController
 @RequestMapping("/api/follow-up")
+@Tag(name = "Acompanhamentos", description = "Gerenciamento de reuniões de acompanhamento formativo")
+@SecurityRequirement(name = "bearer-jwt")
 public class FollowUpMeetingController {
 
     @Autowired
@@ -36,7 +47,8 @@ public class FollowUpMeetingController {
     @Autowired
     private RoleService roleService;
 
-    // Obter todos os acompanhamentos acessíveis pelo usuário logado
+    @Operation(summary = "Listar acompanhamentos acessíveis", description = "Retorna todos os acompanhamentos que o usuário pode acessar")
+    @ApiResponse(responseCode = "200", description = "Acompanhamentos listados com sucesso")
     @GetMapping
     public ResponseEntity<List<FollowUpMeetingDTO>> getAccessibleFollowUpMeetings(
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -51,7 +63,8 @@ public class FollowUpMeetingController {
         return ResponseEntity.ok(dtos);
     }
 
-    // Obter acompanhamentos criados pelo formador logado
+    @Operation(summary = "Meus acompanhamentos", description = "Retorna acompanhamentos criados pelo formador logado")
+    @ApiResponse(responseCode = "200", description = "Acompanhamentos listados com sucesso")
     @GetMapping("/my-meetings")
     public ResponseEntity<List<FollowUpMeetingDTO>> getMyFollowUpMeetings(
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -66,10 +79,14 @@ public class FollowUpMeetingController {
         return ResponseEntity.ok(dtos);
     }
 
-    // Obter acompanhamentos de um usuário específico
+    @Operation(summary = "Acompanhamentos por mentorado", description = "Retorna acompanhamentos de um usuário específico")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Acompanhamentos listados com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Mentorado não encontrado")
+    })
     @GetMapping("/mentee/{menteeId}")
     public ResponseEntity<List<FollowUpMeetingDTO>> getFollowUpMeetingsByMentee(
-            @PathVariable Long menteeId,
+            @Parameter(description = "ID do mentorado") @PathVariable Long menteeId,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -78,7 +95,6 @@ public class FollowUpMeetingController {
             User mentee = userService.getUserById(menteeId);
             List<FollowUpMeeting> meetings = followUpService.getFollowUpMeetingsByMentee(mentee);
 
-            // Filtrar apenas os acompanhamentos que o usuário pode acessar
             List<FollowUpMeetingDTO> dtos = meetings.stream()
                     .filter(meeting -> meeting.canBeAccessedBy(currentUser))
                     .map(meeting -> convertToDTO(meeting, currentUser))
@@ -90,10 +106,11 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Obter acompanhamentos por status
+    @Operation(summary = "Acompanhamentos por status", description = "Retorna acompanhamentos filtrando por status")
+    @ApiResponse(responseCode = "200", description = "Acompanhamentos listados com sucesso")
     @GetMapping("/status/{status}")
     public ResponseEntity<List<FollowUpMeetingDTO>> getFollowUpMeetingsByStatus(
-            @PathVariable FollowUpMeeting.MeetingStatus status,
+            @Parameter(description = "Status do acompanhamento") @PathVariable FollowUpMeeting.MeetingStatus status,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -106,10 +123,11 @@ public class FollowUpMeetingController {
         return ResponseEntity.ok(dtos);
     }
 
-    // Obter acompanhamentos próximos
+    @Operation(summary = "Próximos acompanhamentos", description = "Retorna acompanhamentos agendados para os próximos dias")
+    @ApiResponse(responseCode = "200", description = "Acompanhamentos listados com sucesso")
     @GetMapping("/upcoming")
     public ResponseEntity<List<FollowUpMeetingDTO>> getUpcomingMeetings(
-            @RequestParam(defaultValue = "7") int days,
+            @Parameter(description = "Número de dias a partir de hoje") @RequestParam(defaultValue = "7") int days,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -122,11 +140,12 @@ public class FollowUpMeetingController {
         return ResponseEntity.ok(dtos);
     }
 
-    // Obter acompanhamentos em um período
+    @Operation(summary = "Acompanhamentos por período", description = "Retorna acompanhamentos em um intervalo de datas")
+    @ApiResponse(responseCode = "200", description = "Acompanhamentos listados com sucesso")
     @GetMapping("/date-range")
     public ResponseEntity<List<FollowUpMeetingDTO>> getFollowUpMeetingsByDateRange(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @Parameter(description = "Data de início") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @Parameter(description = "Data de fim") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -140,10 +159,15 @@ public class FollowUpMeetingController {
         return ResponseEntity.ok(dtos);
     }
 
-    // Obter um acompanhamento específico
+    @Operation(summary = "Obter acompanhamento por ID", description = "Retorna um acompanhamento específico pelo seu ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Acompanhamento encontrado"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Acompanhamento não encontrado")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<FollowUpMeetingDTO> getFollowUpMeetingById(
-            @PathVariable Long id,
+            @Parameter(description = "ID do acompanhamento") @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -161,7 +185,12 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Criar novo acompanhamento
+    @Operation(summary = "Criar acompanhamento", description = "Cria um novo registro de acompanhamento")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Acompanhamento criado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado")
+    })
     @PostMapping
     public ResponseEntity<FollowUpMeetingDTO> createFollowUpMeeting(
             @Valid @RequestBody FollowUpMeetingDTO dto,
@@ -180,10 +209,16 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Atualizar acompanhamento
+    @Operation(summary = "Atualizar acompanhamento", description = "Atualiza um acompanhamento existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Acompanhamento atualizado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Acompanhamento não encontrado")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<FollowUpMeetingDTO> updateFollowUpMeeting(
-            @PathVariable Long id,
+            @Parameter(description = "ID do acompanhamento") @PathVariable Long id,
             @Valid @RequestBody FollowUpMeetingDTO dto,
             @AuthenticationPrincipal UserDetails userDetails) {
 
@@ -201,10 +236,15 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Excluir acompanhamento
+    @Operation(summary = "Excluir acompanhamento", description = "Exclui um acompanhamento existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Acompanhamento excluído com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Acompanhamento não encontrado")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteFollowUpMeeting(
-            @PathVariable Long id,
+            @Parameter(description = "ID do acompanhamento") @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -219,11 +259,16 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Compartilhar acompanhamento com usuário
+    @Operation(summary = "Compartilhar com usuário", description = "Compartilha um acompanhamento com um usuário específico")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Acompanhamento compartilhado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Acompanhamento ou usuário não encontrado")
+    })
     @PostMapping("/{id}/share/user/{userId}")
     public ResponseEntity<FollowUpMeetingDTO> shareWithUser(
-            @PathVariable Long id,
-            @PathVariable Long userId,
+            @Parameter(description = "ID do acompanhamento") @PathVariable Long id,
+            @Parameter(description = "ID do usuário") @PathVariable Long userId,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -238,11 +283,16 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Compartilhar acompanhamento com role
+    @Operation(summary = "Compartilhar com role", description = "Compartilha um acompanhamento com todos os usuários de uma role")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Acompanhamento compartilhado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Acompanhamento ou role não encontrado")
+    })
     @PostMapping("/{id}/share/role/{roleId}")
     public ResponseEntity<FollowUpMeetingDTO> shareWithRole(
-            @PathVariable Long id,
-            @PathVariable Long roleId,
+            @Parameter(description = "ID do acompanhamento") @PathVariable Long id,
+            @Parameter(description = "ID da role") @PathVariable Long roleId,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -257,11 +307,16 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Remover compartilhamento
+    @Operation(summary = "Remover compartilhamento com usuário", description = "Remove o compartilhamento de um acompanhamento com um usuário")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Compartilhamento removido com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Acompanhamento ou usuário não encontrado")
+    })
     @DeleteMapping("/{id}/share/user/{userId}")
     public ResponseEntity<FollowUpMeetingDTO> removeShareWithUser(
-            @PathVariable Long id,
-            @PathVariable Long userId,
+            @Parameter(description = "ID do acompanhamento") @PathVariable Long id,
+            @Parameter(description = "ID do usuário") @PathVariable Long userId,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -276,10 +331,15 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Marcar como realizado
+    @Operation(summary = "Marcar como realizado", description = "Marca um acompanhamento como realizado")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Acompanhamento marcado como realizado"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Acompanhamento não encontrado")
+    })
     @PutMapping("/{id}/complete")
     public ResponseEntity<FollowUpMeetingDTO> markAsCompleted(
-            @PathVariable Long id,
+            @Parameter(description = "ID do acompanhamento") @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -294,10 +354,15 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Cancelar acompanhamento
+    @Operation(summary = "Cancelar acompanhamento", description = "Cancela um acompanhamento agendado")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Acompanhamento cancelado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Acompanhamento não encontrado")
+    })
     @PutMapping("/{id}/cancel")
     public ResponseEntity<FollowUpMeetingDTO> cancelMeeting(
-            @PathVariable Long id,
+            @Parameter(description = "ID do acompanhamento") @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -312,7 +377,8 @@ public class FollowUpMeetingController {
         }
     }
 
-    // Obter estatísticas
+    @Operation(summary = "Obter estatísticas", description = "Retorna estatísticas de acompanhamentos")
+    @ApiResponse(responseCode = "200", description = "Estatísticas obtidas com sucesso")
     @GetMapping("/statistics")
     public ResponseEntity<FollowUpMeetingService.FollowUpStatistics> getStatistics(
             @AuthenticationPrincipal UserDetails userDetails) {

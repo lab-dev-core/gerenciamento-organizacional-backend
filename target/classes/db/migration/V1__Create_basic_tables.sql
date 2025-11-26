@@ -44,6 +44,9 @@ CREATE TABLE users (
                        life_stage VARCHAR(255) NOT NULL,
                        community_years INTEGER NOT NULL,
                        community_months INTEGER,
+                       email VARCHAR(255) NOT NULL UNIQUE,
+                       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
                        FOREIGN KEY (mission_location_id) REFERENCES mission_locations(id),
                        FOREIGN KEY (mentor_id) REFERENCES users(id),

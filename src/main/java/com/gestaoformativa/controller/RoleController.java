@@ -18,8 +18,18 @@ import javax.validation.Valid;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 @RestController
 @RequestMapping("/api/roles")
+@Tag(name = "Papéis", description = "Gerenciamento de papéis e permissões")
+@SecurityRequirement(name = "bearer-jwt")
 public class RoleController {
 
     @Autowired
@@ -28,12 +38,15 @@ public class RoleController {
     @Autowired
     private UserService userService;
 
-    // Obter todos os papéis
+    @Operation(summary = "Listar papéis", description = "Retorna todos os papéis do sistema")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Papéis listados com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar papéis")
+    })
     @GetMapping
     public ResponseEntity<List<RoleDTO>> getAllRoles(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar papéis
         if (!currentUser.hasPermission("roles")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -47,13 +60,17 @@ public class RoleController {
         return ResponseEntity.ok(roleDTOs);
     }
 
-    // Obter um papel específico por ID
+    @Operation(summary = "Obter papel por ID", description = "Retorna um papel específico pelo seu ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Papel encontrado"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar papéis"),
+            @ApiResponse(responseCode = "404", description = "Papel não encontrado")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<RoleDTO> getRoleById(@PathVariable Long id,
                                                @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar papéis
         if (!currentUser.hasPermission("roles")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -66,13 +83,17 @@ public class RoleController {
         }
     }
 
-    // Criar um novo papel
+    @Operation(summary = "Criar papel", description = "Cria um novo papel no sistema")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Papel criado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar papéis")
+    })
     @PostMapping
     public ResponseEntity<RoleDTO> createRole(@Valid @RequestBody RoleDTO roleDTO,
                                               @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar papéis
         if (!currentUser.hasPermission("roles")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -86,14 +107,19 @@ public class RoleController {
         }
     }
 
-    // Atualizar um papel existente
+    @Operation(summary = "Atualizar papel", description = "Atualiza um papel existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Papel atualizado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar papéis"),
+            @ApiResponse(responseCode = "404", description = "Papel não encontrado")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<RoleDTO> updateRole(@PathVariable Long id,
                                               @Valid @RequestBody RoleDTO roleDTO,
                                               @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar papéis
         if (!currentUser.hasPermission("roles")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -109,13 +135,18 @@ public class RoleController {
         }
     }
 
-    // Excluir um papel
+    @Operation(summary = "Excluir papel", description = "Exclui um papel existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Papel excluído com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar papéis"),
+            @ApiResponse(responseCode = "404", description = "Papel não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Conflito - papel não pode ser excluído")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteRole(@PathVariable Long id,
                                            @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar papéis
         if (!currentUser.hasPermission("roles")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -126,18 +157,21 @@ public class RoleController {
         } catch (EntityNotFoundException e) {
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
-            // Não é possível excluir um papel que está sendo usado por usuários
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
         }
     }
 
-    // Obter usuários com um papel específico
+    @Operation(summary = "Usuários do papel", description = "Retorna usuários associados a um papel")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Usuários listados com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar papéis"),
+            @ApiResponse(responseCode = "404", description = "Papel não encontrado")
+    })
     @GetMapping("/{id}/users")
     public ResponseEntity<List<UserDTO>> getUsersByRole(@PathVariable Long id,
                                                         @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar papéis
         if (!currentUser.hasPermission("roles")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -166,7 +200,6 @@ public class RoleController {
         dto.setCanManageStages(role.getCanManageStages());
         dto.setCanManageDocuments(role.getCanManageDocuments());
 
-        // Adicionar contagem de usuários se disponível
         if (role.getUsers() != null) {
             dto.setUserCount(role.getUsers().size());
         } else {
@@ -178,9 +211,6 @@ public class RoleController {
 
     private Role convertToEntity(RoleDTO dto) {
         Role role = new Role();
-
-        // Não definimos o ID ao criar uma nova entidade
-        // Se estamos atualizando, o ID será definido pelo método de serviço
 
         role.setName(dto.getName());
         role.setDescription(dto.getDescription());
@@ -194,7 +224,6 @@ public class RoleController {
 
     private UserDTO convertUserToDTO(User user) {
         UserDTO dto = new UserDTO();
-        // Definir apenas os campos básicos para uma visualização resumida
         dto.setId(user.getId());
         dto.setUsername(user.getUsername());
         dto.setName(user.getName());

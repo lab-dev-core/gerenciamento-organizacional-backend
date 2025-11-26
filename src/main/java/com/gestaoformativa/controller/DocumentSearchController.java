@@ -19,8 +19,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 @RestController
 @RequestMapping("/api/search")
+@Tag(name = "Busca de Documentos", description = "Endpoints para busca e filtragem de documentos")
+@SecurityRequirement(name = "bearer-jwt")
 public class DocumentSearchController {
 
     @Autowired
@@ -29,19 +40,21 @@ public class DocumentSearchController {
     @Autowired
     private UserService userService;
 
+    @Operation(summary = "Buscar documentos", description = "Busca documentos com múltiplos critérios de filtro")
+    @ApiResponse(responseCode = "200", description = "Busca realizada com sucesso")
     @GetMapping("/documents")
     public ResponseEntity<Page<DocumentDTO>> searchDocuments(
-            @RequestParam(required = false) String title,
-            @RequestParam(required = false) Long authorId,
-            @RequestParam(required = false) FormativeDocument.DocumentType documentType,
-            @RequestParam(required = false) FormativeDocument.AccessLevel accessLevel,
-            @RequestParam(required = false) User.LifeStage stage,
-            @RequestParam(required = false) Long locationId,
-            @RequestParam(required = false) LocalDateTime fromDate,
-            @RequestParam(required = false) LocalDateTime toDate,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Título do documento") @RequestParam(required = false) String title,
+            @Parameter(description = "ID do autor") @RequestParam(required = false) Long authorId,
+            @Parameter(description = "Tipo de documento") @RequestParam(required = false) FormativeDocument.DocumentType documentType,
+            @Parameter(description = "Nível de acesso") @RequestParam(required = false) FormativeDocument.AccessLevel accessLevel,
+            @Parameter(description = "Estágio de vida") @RequestParam(required = false) User.LifeStage stage,
+            @Parameter(description = "ID da localização") @RequestParam(required = false) Long locationId,
+            @Parameter(description = "Data inicial") @RequestParam(required = false) LocalDateTime fromDate,
+            @Parameter(description = "Data final") @RequestParam(required = false) LocalDateTime toDate,
+            @Parameter(description = "Palavra-chave") @RequestParam(required = false) String keyword,
+            @Parameter(description = "Número da página") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamanho da página") @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -61,16 +74,16 @@ public class DocumentSearchController {
         return ResponseEntity.ok(dtoPage);
     }
 
-    // Busca por texto no conteúdo dos documentos
+    @Operation(summary = "Buscar por conteúdo", description = "Busca documentos pelo conteúdo textual")
+    @ApiResponse(responseCode = "200", description = "Busca por conteúdo realizada com sucesso")
     @GetMapping("/content")
     public ResponseEntity<List<DocumentDTO>> searchByContent(
-            @RequestParam String text,
+            @Parameter(description = "Texto para busca", required = true) @RequestParam String text,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
         List<FormativeDocument> documents = searchService.searchByContent(text);
 
-        // Filtrar documentos que o usuário pode acessar e converter para DTOs
         List<DocumentDTO> documentDTOs = documents.stream()
                 .filter(currentUser::canAccessDocument)
                 .map(this::convertToDTO)
@@ -79,7 +92,8 @@ public class DocumentSearchController {
         return ResponseEntity.ok(documentDTOs);
     }
 
-    // Obter documentos recentemente atualizados
+    @Operation(summary = "Documentos recentes", description = "Retorna documentos recentemente atualizados")
+    @ApiResponse(responseCode = "200", description = "Documentos recentes listados com sucesso")
     @GetMapping("/recent")
     public ResponseEntity<List<DocumentDTO>> getRecentlyUpdatedDocuments(
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -87,7 +101,6 @@ public class DocumentSearchController {
         User currentUser = userService.findByUsername(userDetails.getUsername());
         List<FormativeDocument> documents = searchService.getRecentlyUpdatedDocuments();
 
-        // Filtrar documentos que o usuário pode acessar e converter para DTOs
         List<DocumentDTO> documentDTOs = documents.stream()
                 .filter(currentUser::canAccessDocument)
                 .map(this::convertToDTO)
@@ -96,18 +109,18 @@ public class DocumentSearchController {
         return ResponseEntity.ok(documentDTOs);
     }
 
-    // Obter documentos mais visualizados
+    @Operation(summary = "Documentos mais visualizados", description = "Retorna os documentos mais visualizados")
+    @ApiResponse(responseCode = "200", description = "Documentos mais visualizados listados com sucesso")
     @GetMapping("/most-viewed")
     public ResponseEntity<List<DocumentDTO>> getMostViewedDocuments(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Número da página") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamanho da página") @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
         Pageable pageable = PageRequest.of(page, size);
         List<FormativeDocument> documents = searchService.getMostViewedDocuments(pageable);
 
-        // Filtrar documentos que o usuário pode acessar e converter para DTOs
         List<DocumentDTO> documentDTOs = documents.stream()
                 .filter(currentUser::canAccessDocument)
                 .map(this::convertToDTO)
@@ -116,18 +129,18 @@ public class DocumentSearchController {
         return ResponseEntity.ok(documentDTOs);
     }
 
-    // Obter documentos recomendados para o usuário atual
+    @Operation(summary = "Documentos recomendados", description = "Retorna documentos recomendados para o usuário")
+    @ApiResponse(responseCode = "200", description = "Documentos recomendados listados com sucesso")
     @GetMapping("/recommended")
     public ResponseEntity<List<DocumentDTO>> getRecommendedDocuments(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Número da página") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamanho da página") @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.findByUsername(userDetails.getUsername());
         Pageable pageable = PageRequest.of(page, size);
         List<FormativeDocument> documents = searchService.getRecommendedDocumentsForUser(currentUser.getId(), pageable);
 
-        // Converter para DTOs
         List<DocumentDTO> documentDTOs = documents.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -135,11 +148,15 @@ public class DocumentSearchController {
         return ResponseEntity.ok(documentDTOs);
     }
 
-    // Método auxiliar
     private DocumentDTO convertToDTO(FormativeDocument document) {
         DocumentDTO dto = new DocumentDTO();
-        // Preencher o DTO com os dados do documento
-        // ...
+        dto.setId(document.getId());
+        dto.setTitle(document.getTitle());
+        dto.setContent(document.getContent());
+        dto.setKeywords(document.getKeywords());
+        dto.setDocumentType(document.getDocumentType());
+        dto.setAccessLevel(document.getAccessLevel());
+        // Preencher outros campos necessários
         return dto;
     }
 }

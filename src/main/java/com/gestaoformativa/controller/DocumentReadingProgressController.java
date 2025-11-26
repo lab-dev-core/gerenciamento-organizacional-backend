@@ -19,8 +19,18 @@ import javax.validation.Valid;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 @RestController
 @RequestMapping("/api/reading-progress")
+@Tag(name = "Progresso de Leitura", description = "Gerenciamento do progresso de leitura de documentos")
+@SecurityRequirement(name = "bearer-jwt")
 public class DocumentReadingProgressController {
 
     @Autowired
@@ -32,7 +42,12 @@ public class DocumentReadingProgressController {
     @Autowired
     private UserService userService;
 
-    // Obter progresso de leitura para o usuário atual e documento específico
+    @Operation(summary = "Obter progresso do usuário", description = "Retorna o progresso de leitura do usuário atual para um documento específico")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Progresso encontrado"),
+            @ApiResponse(responseCode = "204", description = "Nenhum progresso encontrado"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado")
+    })
     @GetMapping("/document/{documentId}")
     public ResponseEntity<ReadingProgressDTO> getUserDocumentProgress(@PathVariable Long documentId,
                                                                       @AuthenticationPrincipal UserDetails userDetails) {
@@ -51,7 +66,12 @@ public class DocumentReadingProgressController {
         }
     }
 
-    // Atualizar progresso de leitura
+    @Operation(summary = "Atualizar progresso", description = "Atualiza ou cria o progresso de leitura do usuário")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Progresso atualizado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado ao documento"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado")
+    })
     @PostMapping("/document/{documentId}")
     public ResponseEntity<ReadingProgressDTO> updateReadingProgress(@PathVariable Long documentId,
                                                                     @Valid @RequestBody ReadingProgressDTO progressDTO,
@@ -59,7 +79,6 @@ public class DocumentReadingProgressController {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
         try {
-            // Verificar se o documento existe e se o usuário pode acessá-lo
             FormativeDocument document = documentService.getDocumentById(documentId);
             if (!currentUser.canAccessDocument(document)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
@@ -80,7 +99,8 @@ public class DocumentReadingProgressController {
         }
     }
 
-    // Obter todos os documentos concluídos pelo usuário atual
+    @Operation(summary = "Documentos concluídos", description = "Retorna todos os documentos concluídos pelo usuário")
+    @ApiResponse(responseCode = "200", description = "Lista de documentos concluídos")
     @GetMapping("/completed")
     public ResponseEntity<List<ReadingProgressDTO>> getCompletedDocuments(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -94,7 +114,8 @@ public class DocumentReadingProgressController {
         return ResponseEntity.ok(progressDTOs);
     }
 
-    // Obter todos os documentos em andamento (não concluídos) pelo usuário atual
+    @Operation(summary = "Documentos em andamento", description = "Retorna documentos não concluídos pelo usuário")
+    @ApiResponse(responseCode = "200", description = "Lista de documentos em andamento")
     @GetMapping("/in-progress")
     public ResponseEntity<List<ReadingProgressDTO>> getInProgressDocuments(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
@@ -108,14 +129,14 @@ public class DocumentReadingProgressController {
         return ResponseEntity.ok(progressDTOs);
     }
 
-    // Obter documentos recentemente visualizados pelo usuário atual
+    @Operation(summary = "Documentos recentes", description = "Retorna documentos recentemente visualizados pelo usuário")
+    @ApiResponse(responseCode = "200", description = "Lista de documentos recentes")
     @GetMapping("/recent")
     public ResponseEntity<List<ReadingProgressDTO>> getRecentlyViewedDocuments(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
         List<FormativeDocument> recentDocs = progressService.getRecentlyViewedDocuments(currentUser.getId());
 
-        // Converter para DTOs de progresso
         List<ReadingProgressDTO> progressDTOs = recentDocs.stream()
                 .map(doc -> {
                     DocumentReadingProgress progress = progressService.getReadingProgress(currentUser.getId(), doc.getId());
@@ -126,16 +147,18 @@ public class DocumentReadingProgressController {
         return ResponseEntity.ok(progressDTOs);
     }
 
-    // Reset de progresso de leitura para um documento específico
+    @Operation(summary = "Resetar progresso", description = "Reseta o progresso de leitura para um documento")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Progresso resetado com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado")
+    })
     @DeleteMapping("/document/{documentId}")
     public ResponseEntity<Void> resetReadingProgress(@PathVariable Long documentId,
                                                      @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
         try {
-            // Verificar se o documento existe
             documentService.getDocumentById(documentId);
-
             progressService.resetReadingProgress(currentUser.getId(), documentId);
             return ResponseEntity.noContent().build();
         } catch (EntityNotFoundException e) {
@@ -143,11 +166,13 @@ public class DocumentReadingProgressController {
         }
     }
 
-    // Método auxiliar
     private ReadingProgressDTO convertToDTO(DocumentReadingProgress progress) {
         ReadingProgressDTO dto = new ReadingProgressDTO();
-        // Preencher o DTO com os dados do progresso
-        // ...
+        dto.setId(progress.getId());
+        dto.setUserId(progress.getUser().getId());
+        dto.setDocumentId(progress.getDocument().getId());
+        dto.setProgressPercentage(progress.getProgressPercentage());
+        dto.setUserNotes(progress.getUserNotes());
         return dto;
     }
 }

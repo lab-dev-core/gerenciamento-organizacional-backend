@@ -5,6 +5,7 @@ import com.gestaoformativa.model.FormativeStage;
 import com.gestaoformativa.model.User;
 import com.gestaoformativa.service.FormativeStageService;
 import com.gestaoformativa.service.UserService;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -19,8 +20,18 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 @RestController
 @RequestMapping("/api/stages")
+@Tag(name = "Etapas Formativas", description = "Gerenciamento de etapas formativas dos usuários")
+@SecurityRequirement(name = "bearer-jwt")
 public class FormativeStageController {
 
     @Autowired
@@ -29,12 +40,15 @@ public class FormativeStageController {
     @Autowired
     private UserService userService;
 
-    // Obter todas as etapas formativas
+    @Operation(summary = "Listar etapas", description = "Retorna todas as etapas formativas (requer permissão)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapas listadas com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar etapas")
+    })
     @GetMapping
     public ResponseEntity<List<FormativeStageDTO>> getAllStages(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar etapas
         if (!currentUser.hasPermission("stages")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -48,7 +62,12 @@ public class FormativeStageController {
         return ResponseEntity.ok(stageDTOs);
     }
 
-    // Obter uma etapa formativa específica
+    @Operation(summary = "Obter etapa por ID", description = "Retorna uma etapa formativa específica pelo seu ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapa encontrada"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Etapa não encontrada")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<FormativeStageDTO> getStageById(@PathVariable Long id,
                                                           @AuthenticationPrincipal UserDetails userDetails) {
@@ -57,7 +76,6 @@ public class FormativeStageController {
         try {
             FormativeStage stage = stageService.getStageById(id);
 
-            // Verificar se o usuário é o dono da etapa ou tem permissão para gerenciar etapas
             if (!stage.getUser().equals(currentUser) && !currentUser.hasPermission("stages")) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
@@ -68,13 +86,17 @@ public class FormativeStageController {
         }
     }
 
-    // Obter etapas formativas por usuário
+    @Operation(summary = "Etapas por usuário", description = "Retorna etapas formativas de um usuário específico")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapas listadas com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
+    })
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<FormativeStageDTO>> getStagesByUser(@PathVariable Long userId,
                                                                    @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário está consultando suas próprias etapas ou tem permissão
         if (!currentUser.getId().equals(userId) && !currentUser.hasPermission("stages")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -92,12 +114,15 @@ public class FormativeStageController {
         }
     }
 
-    // Obter etapas formativas ativas (não concluídas)
+    @Operation(summary = "Etapas ativas", description = "Retorna etapas formativas ativas (não concluídas)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapas ativas listadas com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar etapas")
+    })
     @GetMapping("/active")
     public ResponseEntity<List<FormativeStageDTO>> getActiveStages(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar etapas
         if (!currentUser.hasPermission("stages")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -111,14 +136,17 @@ public class FormativeStageController {
         return ResponseEntity.ok(stageDTOs);
     }
 
-    // Obter etapas formativas ativas em uma data específica
+    @Operation(summary = "Etapas ativas em data", description = "Retorna etapas formativas ativas em uma data específica")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapas listadas com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar etapas")
+    })
     @GetMapping("/active-at")
     public ResponseEntity<List<FormativeStageDTO>> getStagesActiveAtDate(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Parameter(description = "Data para verificação") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar etapas
         if (!currentUser.hasPermission("stages")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -132,14 +160,19 @@ public class FormativeStageController {
         return ResponseEntity.ok(stageDTOs);
     }
 
-    // Criar uma nova etapa formativa
+    @Operation(summary = "Criar etapa", description = "Cria uma nova etapa formativa para um usuário")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Etapa criada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
+    })
     @PostMapping("/user/{userId}")
     public ResponseEntity<FormativeStageDTO> createStage(@PathVariable Long userId,
                                                          @Valid @RequestBody FormativeStageDTO stageDTO,
                                                          @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário está criando para si mesmo ou tem permissão
         if (!currentUser.getId().equals(userId) && !currentUser.hasPermission("stages")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -155,7 +188,13 @@ public class FormativeStageController {
         }
     }
 
-    // Atualizar uma etapa formativa existente
+    @Operation(summary = "Atualizar etapa", description = "Atualiza uma etapa formativa existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapa atualizada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Etapa não encontrada")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<FormativeStageDTO> updateStage(@PathVariable Long id,
                                                          @Valid @RequestBody FormativeStageDTO stageDTO,
@@ -165,7 +204,6 @@ public class FormativeStageController {
         try {
             FormativeStage existingStage = stageService.getStageById(id);
 
-            // Verificar se o usuário é o dono da etapa ou tem permissão
             if (!existingStage.getUser().equals(currentUser) && !currentUser.hasPermission("stages")) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
@@ -180,7 +218,13 @@ public class FormativeStageController {
         }
     }
 
-    // Concluir uma etapa formativa
+    @Operation(summary = "Concluir etapa", description = "Marca uma etapa formativa como concluída")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapa concluída com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Etapa já concluída ou dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Etapa não encontrada")
+    })
     @PutMapping("/{id}/complete")
     public ResponseEntity<FormativeStageDTO> completeStage(@PathVariable Long id,
                                                            @AuthenticationPrincipal UserDetails userDetails) {
@@ -189,7 +233,6 @@ public class FormativeStageController {
         try {
             FormativeStage existingStage = stageService.getStageById(id);
 
-            // Verificar se o usuário é o dono da etapa ou tem permissão
             if (!existingStage.getUser().equals(currentUser) && !currentUser.hasPermission("stages")) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
@@ -203,7 +246,12 @@ public class FormativeStageController {
         }
     }
 
-    // Excluir uma etapa formativa
+    @Operation(summary = "Excluir etapa", description = "Exclui uma etapa formativa")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Etapa excluída com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado"),
+            @ApiResponse(responseCode = "404", description = "Etapa não encontrada")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteStage(@PathVariable Long id,
                                             @AuthenticationPrincipal UserDetails userDetails) {
@@ -212,7 +260,6 @@ public class FormativeStageController {
         try {
             FormativeStage existingStage = stageService.getStageById(id);
 
-            // Verificar se o usuário é o dono da etapa ou tem permissão
             if (!existingStage.getUser().equals(currentUser) && !currentUser.hasPermission("stages")) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
@@ -224,13 +271,16 @@ public class FormativeStageController {
         }
     }
 
-    // Obter etapas formativas longas (com duração maior que um número de meses)
+    @Operation(summary = "Etapas longas", description = "Retorna etapas com duração maior que X meses")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapas listadas com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar etapas")
+    })
     @GetMapping("/longer-than/{months}")
     public ResponseEntity<List<FormativeStageDTO>> getStagesLongerThan(@PathVariable int months,
                                                                        @AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar etapas
         if (!currentUser.hasPermission("stages")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -244,12 +294,15 @@ public class FormativeStageController {
         return ResponseEntity.ok(stageDTOs);
     }
 
-    // Obter etapas formativas recentemente iniciadas
+    @Operation(summary = "Etapas recentemente iniciadas", description = "Retorna etapas que começaram recentemente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapas listadas com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar etapas")
+    })
     @GetMapping("/recently-started")
     public ResponseEntity<List<FormativeStageDTO>> getRecentlyStartedStages(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar etapas
         if (!currentUser.hasPermission("stages")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -263,12 +316,15 @@ public class FormativeStageController {
         return ResponseEntity.ok(stageDTOs);
     }
 
-    // Obter etapas formativas recentemente concluídas
+    @Operation(summary = "Etapas recentemente concluídas", description = "Retorna etapas que foram concluídas recentemente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Etapas listadas com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Sem permissão para gerenciar etapas")
+    })
     @GetMapping("/recently-completed")
     public ResponseEntity<List<FormativeStageDTO>> getRecentlyCompletedStages(@AuthenticationPrincipal UserDetails userDetails) {
         User currentUser = userService.findByUsername(userDetails.getUsername());
 
-        // Verificar se o usuário tem permissão para gerenciar etapas
         if (!currentUser.hasPermission("stages")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -296,7 +352,6 @@ public class FormativeStageController {
             dto.setUserName(stage.getUser().getName());
         }
 
-        // Informações adicionais
         dto.setIsActive(stage.isActive());
 
         return dto;
@@ -305,14 +360,9 @@ public class FormativeStageController {
     private FormativeStage convertToEntity(FormativeStageDTO dto) {
         FormativeStage stage = new FormativeStage();
 
-        // Não definimos o ID ao criar uma nova entidade
-        // Se estamos atualizando, o ID será definido pelo método de serviço
-
         stage.setName(dto.getName());
         stage.setStartDate(dto.getStartDate());
         stage.setEndDate(dto.getEndDate());
-
-        // O usuário será definido pelo serviço
 
         return stage;
     }
