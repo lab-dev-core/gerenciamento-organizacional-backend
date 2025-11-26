@@ -10,7 +10,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "users")
@@ -97,6 +99,47 @@ public class User implements UserDetails {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<DocumentReadingProgress> documentProgress;
+
+    // Acompanhamentos onde este usuário é o formador
+    @OneToMany(mappedBy = "mentor")
+    private List<FollowUpMeeting> mentoringMeetings;
+
+    // Acompanhamentos onde este usuário é o formando
+    @OneToMany(mappedBy = "mentee")
+    private List<FollowUpMeeting> menteeMeetings;
+
+    // Método auxiliar para obter todos os acompanhamentos ativos como formador
+    public List<FollowUpMeeting> getActiveMentoringMeetings() {
+        if (mentoringMeetings == null) {
+            return Collections.emptyList();
+        }
+
+        return mentoringMeetings.stream()
+                .filter(meeting -> meeting.getStatus() == FollowUpMeeting.MeetingStatus.SCHEDULED)
+                .sorted(Comparator.comparing(FollowUpMeeting::getScheduledDate))
+                .collect(Collectors.toList());
+    }
+
+    // Método auxiliar para obter todos os acompanhamentos como formando
+    public List<FollowUpMeeting> getMyMenteeMeetings() {
+        if (menteeMeetings == null) {
+            return Collections.emptyList();
+        }
+
+        return menteeMeetings.stream()
+                .sorted(Comparator.comparing(FollowUpMeeting::getScheduledDate).reversed())
+                .collect(Collectors.toList());
+    }
+
+    // Método para verificar se é formador de alguém
+    public boolean isMentorOf(User user) {
+        if (mentoringMeetings == null || mentoringMeetings.isEmpty()) {
+            return false;
+        }
+
+        return mentoringMeetings.stream()
+                .anyMatch(meeting -> meeting.getMentee().equals(user));
+    }
 
     public enum LifeStage {
         DISCIPLESHIP_IN_MISSION("Discipulado em Missão"),

@@ -80,6 +80,7 @@ public class DataInitializer implements ApplicationRunner {
         adminUser.setIsAccountNonExpired(true);
         adminUser.setIsAccountNonLocked(true);
         adminUser.setIsCredentialsNonExpired(true);
+        adminUser.setEmail("gvitordasilva@gmail.com");
 
         userRepository.save(adminUser);
         log.info("✅ Usuário admin criado com sucesso!");
