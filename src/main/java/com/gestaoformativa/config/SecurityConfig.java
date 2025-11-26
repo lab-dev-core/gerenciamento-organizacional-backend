@@ -44,6 +44,17 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/users/create-admin-**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/api/tenants/**").permitAll()
+                        .requestMatchers("/api/stages/**").permitAll()
+                        .requestMatchers("/api/documents/**").permitAll()
+                        .requestMatchers("/api/follow-up/**").permitAll()
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/api-docs/**",
+                                "/api-docs.yaml",
+                                "/swagger-resources/**",
+                                "/webjars/**").permitAll()
 //                        .requestMatchers("/api/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/roles/**").hasRole("ADMIN")
                         .anyRequest().authenticated()

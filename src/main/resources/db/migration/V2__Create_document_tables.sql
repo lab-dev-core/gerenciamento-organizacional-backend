@@ -1,5 +1,5 @@
 -- Tabela de documentos formativos
-CREATE TABLE formative_documents (
+CREATE TABLE IF NOT EXISTS formative_documents (
                                      id BIGSERIAL PRIMARY KEY,
                                      title VARCHAR(255) NOT NULL,
                                      content TEXT,
@@ -17,7 +17,7 @@ CREATE TABLE formative_documents (
 );
 
 -- Tabela de categorias de documentos
-CREATE TABLE document_categories (
+CREATE TABLE IF NOT EXISTS document_categories (
                                      id BIGSERIAL PRIMARY KEY,
                                      name VARCHAR(255) NOT NULL UNIQUE,
                                      description TEXT,
@@ -27,7 +27,7 @@ CREATE TABLE document_categories (
 );
 
 -- Tabela de estágios formativos
-CREATE TABLE formative_stages (
+CREATE TABLE IF NOT EXISTS formative_stages (
                                   id BIGSERIAL PRIMARY KEY,
                                   name VARCHAR(255) NOT NULL,
                                   start_date DATE NOT NULL,

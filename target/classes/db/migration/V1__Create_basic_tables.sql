@@ -1,5 +1,5 @@
 -- Tabela de roles
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
                        id BIGSERIAL PRIMARY KEY,
                        name VARCHAR(255) NOT NULL UNIQUE,
                        description TEXT,
@@ -10,7 +10,7 @@ CREATE TABLE roles (
 );
 
 -- Tabela de localizações
-CREATE TABLE mission_locations (
+CREATE TABLE IF NOT EXISTS mission_locations (
                                    id BIGSERIAL PRIMARY KEY,
                                    name VARCHAR(255) NOT NULL,
                                    description TEXT,
@@ -23,7 +23,7 @@ CREATE TABLE mission_locations (
 );
 
 -- Tabela de usuários
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
                        id BIGSERIAL PRIMARY KEY,
                        username VARCHAR(255) NOT NULL UNIQUE,
                        name VARCHAR(255) NOT NULL,

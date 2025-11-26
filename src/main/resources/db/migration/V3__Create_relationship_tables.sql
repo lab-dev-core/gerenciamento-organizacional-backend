@@ -1,5 +1,5 @@
 -- Mapeamento documento-categoria
-CREATE TABLE document_category_mapping (
+CREATE TABLE IF NOT EXISTS document_category_mapping (
                                            category_id BIGINT NOT NULL,
                                            document_id BIGINT NOT NULL,
                                            PRIMARY KEY (category_id, document_id),
@@ -8,7 +8,7 @@ CREATE TABLE document_category_mapping (
 );
 
 -- Estágios permitidos para documentos
-CREATE TABLE document_allowed_stages (
+CREATE TABLE IF NOT EXISTS document_allowed_stages (
                                          document_id BIGINT NOT NULL,
                                          life_stage VARCHAR(255) NOT NULL,
                                          PRIMARY KEY (document_id, life_stage),
@@ -16,7 +16,7 @@ CREATE TABLE document_allowed_stages (
 );
 
 -- Localizações permitidas para documentos
-CREATE TABLE document_allowed_locations (
+CREATE TABLE IF NOT EXISTS document_allowed_locations (
                                             document_id BIGINT NOT NULL,
                                             location_id BIGINT NOT NULL,
                                             PRIMARY KEY (document_id, location_id),
@@ -25,7 +25,7 @@ CREATE TABLE document_allowed_locations (
 );
 
 -- Usuários com acesso específico a documentos
-CREATE TABLE document_allowed_users (
+CREATE TABLE IF NOT EXISTS document_allowed_users (
                                         document_id BIGINT NOT NULL,
                                         user_id BIGINT NOT NULL,
                                         PRIMARY KEY (document_id, user_id),
@@ -34,7 +34,7 @@ CREATE TABLE document_allowed_users (
 );
 
 -- Roles com acesso específico a documentos
-CREATE TABLE document_allowed_roles (
+CREATE TABLE IF NOT EXISTS document_allowed_roles (
                                         document_id BIGINT NOT NULL,
                                         role_id BIGINT NOT NULL,
                                         PRIMARY KEY (document_id, role_id),
@@ -42,7 +42,7 @@ CREATE TABLE document_allowed_roles (
                                         FOREIGN KEY (role_id) REFERENCES roles(id)
 );
 
-CREATE TABLE document_reading_progress (
+CREATE TABLE IF NOT EXISTS document_reading_progress (
                                            id BIGSERIAL PRIMARY KEY,
                                            user_id BIGINT NOT NULL,
                                            document_id BIGINT NOT NULL,
