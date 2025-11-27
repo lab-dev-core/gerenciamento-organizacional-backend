@@ -1,0 +1,11 @@
+[Unit]
+Description=Gestão Formativa App
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/java -jar /home/dev-core/htdocs/app.dev-core.online/gerenciamento-organizacional-backend/target/gestaoFormativa-0.0.1-SNAPSHOT.jar --server.port=8081
+Restart=always
+User=seuusuario
+
+[Install]
+WantedBy=multi-user.target
