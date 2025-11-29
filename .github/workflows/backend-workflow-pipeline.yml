@@ -1,0 +1,222 @@
+
+name: Build and Deploy Backend to Azure VM
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ "main" ]  # dispara a cada push na main
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    env:
+      SSH_HOST: ${{ secrets.AZURE_HOST }}
+      SSH_USER: ${{ secrets.AZURE_USER }}
+      SSH_PORT: ${{ secrets.AZURE_PORT }}                    # opcional (se usa porta custom)
+      REPO_URL: https://github.com/lab-dev-core/gerenciamento-organizacional-backend.git
+      REPO_BRANCH: main
+      APP_ROOT: /home/dev-core/htdocs/app.dev-core.online/gerenciamento-organizacional-backend
+      SERVICE_NAME: gestaoformativa
+      APP_PORT: "8081"
+      JAR_NAME: gestaoFormativa-0.0.1-SNAPSHOT.jar
+      JAVA_VERSION: "17"                                     # ajuste conforme sua VM
+      BACKEND_REPO_PAT: ${{ secrets.BACKEND_REPO_PAT }}      # opcional: para repo privado futuramente
+
+    steps:
+      - name: Checkout (optional)
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for var in AZURE_HOST AZURE_USER AZURE_SSH_KEY; do
+            if [[ -z "${{ secrets[format('{0}', var)] }}" ]]; then
+              echo "ERROR: Secret $var não está definido."
+              exit 1
+            fi
+          done
+          echo "Secrets obrigatórios presentes."
+
+      - name: Prepare SSH key & known_hosts
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.AZURE_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          PORT_ARG=""
+          if [[ -n "${SSH_PORT:-}" ]]; then PORT_ARG="-p ${SSH_PORT}"; fi
+          ssh-keyscan -T 5 -H ${PORT_ARG} "${SSH_HOST}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Pre-flight check on VM (java/maven/docker)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT_OPT=""
+          if [[ -n "${SSH_PORT:-}" ]]; then PORT_OPT="-p ${SSH_PORT}"; fi
+          ssh ${PORT_OPT} -i key.pem "${SSH_USER}@${SSH_HOST}" << 'EOF'
+            set -e
+            echo "--- Checking runtime deps ---"
+            command -v java >/dev/null 2>&1 || { echo "Java não encontrado"; exit 1; }
+            java -version || true
+            command -v mvn  >/dev/null 2>&1 || { echo "Maven não encontrado"; exit 1; }
+            mvn -v || true
+            command -v docker >/dev/null 2>&1 || { echo "Docker não encontrado"; exit 1; }
+            if command -v docker compose >/dev/null 2>&1; then
+              echo "docker compose v2 OK"
+            elif command -v docker-compose >/dev/null 2>&1; then
+              echo "docker-compose v1 OK"
+            else
+              echo "Nem 'docker compose' nem 'docker-compose' encontrados"; exit 1
+            fi
+          EOF
+
+      - name: Stop systemd service before build
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT_OPT=""
+          if [[ -n "${SSH_PORT:-}" ]]; then PORT_OPT="-p ${SSH_PORT}"; fi
+          ssh ${PORT_OPT} -i key.pem "${SSH_USER}@${SSH_HOST}" << 'EOF'
+            set -e
+            SERVICE_NAME="gestaoformativa"
+            echo "--- Parando serviço systemd: ${SERVICE_NAME} ---"
+            if systemctl is-active --quiet "${SERVICE_NAME}"; then
+              sudo systemctl stop "${SERVICE_NAME}"
+              echo "Serviço parado."
+            else
+              echo "Serviço não estava ativo; seguindo."
+            fi
+          EOF
+
+      - name: Clone/Update repo, manage DB with Compose (no restart if already running), build JAR, systemd deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT_OPT=""
+          if [[ -n "${SSH_PORT:-}" ]]; then PORT_OPT="-p ${SSH_PORT}"; fi
+
+          ssh ${PORT_OPT} -i key.pem "${SSH_USER}@${SSH_HOST}" << EOF
+            set -e
+
+            REPO_URL="${REPO_URL}"
+            REPO_BRANCH="${REPO_BRANCH}"
+            APP_ROOT="${APP_ROOT}"
+            SERVICE_NAME="${SERVICE_NAME}"
+            APP_PORT="${APP_PORT}"
+            JAR_NAME="${JAR_NAME}"
+            BACKEND_REPO_PAT="${BACKEND_REPO_PAT}"
+
+            echo "--- Garantir APP_ROOT: \${APP_ROOT} ---"
+            if [ ! -d "\${APP_ROOT}" ]; then
+              sudo mkdir -p "\${APP_ROOT}"
+              sudo chown \$USER:\$USER "\${APP_ROOT}"
+            fi
+
+            echo "--- Clonar/Atualizar repo ---"
+            if [ ! -d "\${APP_ROOT}/.git" ]; then
+              if [ -n "\${BACKEND_REPO_PAT}" ]; then
+                echo "Repo privado (futuro): usando PAT"
+                git -c http.extraHeader="Authorization: token \${BACKEND_REPO_PAT}" clone -b "\${REPO_BRANCH}" "\${REPO_URL}" "\${APP_ROOT}"
+              else
+                git clone -b "\${REPO_BRANCH}" "\${REPO_URL}" "\${APP_ROOT}"
+              fi
+            else
+              cd "\${APP_ROOT}"
+              if [ -n "\${BACKEND_REPO_PAT}" ]; then
+                git -c http.extraHeader="Authorization: token \${BACKEND_REPO_PAT}" fetch origin
+              else
+                git fetch origin
+              fi
+              git reset --hard "origin/\${REPO_BRANCH}"
+            fi
+
+            echo "--- Docker Compose (DB) ---"
+            cd "\${APP_ROOT}"
+            USE_COMPOSE=""
+            if command -v docker compose >/dev/null 2>&1; then
+              USE_COMPOSE="docker compose"
+            elif command -v docker-compose >/dev/null 2>&1; then
+              USE_COMPOSE="docker-compose"
+            fi
+
+            if [ -f "\${APP_ROOT}/docker-compose.yml" ]; then
+              echo "Compose encontrado em \${APP_ROOT}/docker-compose.yml"
+              # Detecta se já há containers ativos dessa stack
+              if \${USE_COMPOSE} ps -q | grep -q .; then
+                echo "Stack já está rodando — não reiniciaremos no workflow."
+                # Se quiser forçar atualização sem restart, comente:
+                # \${USE_COMPOSE} up -d --no-deps --build
+              else
+                echo "Stack não está rodando — executando 'compose up -d'"
+                \${USE_COMPOSE} up -d
+              fi
+            else
+              echo "docker-compose.yml não encontrado na raiz do repo (\${APP_ROOT}). Pulando DB."
+            fi
+
+            echo "--- Build Maven (seguindo sua sequência) ---"
+            mvn -B clean install
+            mvn -B clean package
+
+            echo "--- JAR alvo ---"
+            if [ -f "target/\${JAR_NAME}" ]; then
+              JAR_PATH="\$(realpath "target/\${JAR_NAME}")"
+            else
+              JAR_PATH="\$(ls -1 target/*.jar 2>/dev/null | head -n 1)"
+              if [ -z "\${JAR_PATH}" ]; then
+                echo "Nenhum JAR encontrado em target/. Verifique o build."
+                exit 1
+              fi
+              JAR_PATH="\$(realpath "\${JAR_PATH}")"
+              echo "Aviso: \${JAR_NAME} não encontrado, usando \${JAR_PATH}"
+            fi
+            echo "Usando JAR: \${JAR_PATH}"
+
+            echo "--- Criando/atualizando serviço systemd: \${SERVICE_NAME} ---"
+            sudo bash -c 'cat > /etc/systemd/system/'"\${SERVICE_NAME}"'.service' <<SVC
+[Unit]
+Description=Gestao Formativa Backend
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=${SSH_USER}
+WorkingDirectory=\${APP_ROOT}
+# EnvironmentFile=/etc/\${SERVICE_NAME}.env  # descomente se usar variáveis externas
+ExecStart=/usr/bin/java -jar \${JAR_PATH} --server.port=\${APP_PORT}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+SVC
+
+            echo "--- Habilitando, reiniciando e verificando serviço ---"
+            sudo systemctl daemon-reload
+            sudo systemctl enable "\${SERVICE_NAME}"
+            sudo systemctl restart "\${SERVICE_NAME}"
+            sudo systemctl status "\${SERVICE_NAME}" --no-pager -l || true
+
+            echo "--- Health check ---"
+            if command -v curl >/dev/null 2>&1; then
+              (curl -sS "http://localhost:\${APP_PORT}/actuator/health" || curl -sS "http://localhost:\${APP_PORT}") || true
+            fi
+          EOF
+
+      - name: Troubleshooting on failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "Falha no deploy do backend. Verifique:"
+          echo "1) Docker/Compose, Java ${JAVA_VERSION} e Maven instalados e funcionais na VM."
+          echo "2) Permissões de ${SSH_USER} (grupo docker, acesso ao APP_ROOT)."
+          echo "3) Porta ${APP_PORT} liberada no firewall/NSG."
+          echo "4) Se repo for privado, configure o secret BACKEND_REPO_PAT."
+          echo "5) Logs do serviço: 'journalctl -u ${SERVICE_NAME} -f'."
