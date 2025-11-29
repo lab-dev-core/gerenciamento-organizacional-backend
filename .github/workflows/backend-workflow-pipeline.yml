@@ -36,16 +36,15 @@ jobs:
           [[ -z "${{ secrets.AZURE_SSH_KEY }}" ]] && MISSING_SECRETS+=("AZURE_SSH_KEY")
           
           if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
-            echo "❌ ERROR: Secrets obrigatórios ausentes: ${MISSING_SECRETS[*]}"
+            echo "ERROR: Secrets obrigatorios ausentes: ${MISSING_SECRETS[*]}"
             exit 1
           fi
           
-          # Aviso se PAT não estiver configurado (para repos privados)
           if [[ -z "${{ secrets.BACKEND_REPO_PAT }}" ]]; then
-            echo "⚠️  AVISO: BACKEND_REPO_PAT não configurado. Se o repo for privado, o clone falhará."
+            echo "AVISO: BACKEND_REPO_PAT nao configurado. Se o repo for privado, o clone falhara."
           fi
           
-          echo "✅ Secrets obrigatórios presentes."
+          echo "Secrets obrigatorios presentes."
 
       - name: Prepare SSH key & known_hosts
         shell: bash
@@ -59,7 +58,7 @@ jobs:
           ssh-keyscan -T 5 -H ${PORT_ARG} "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Pre-flight check on VM (java/maven/docker)
+      - name: Pre-flight check on VM
         shell: bash
         run: |
           set -euo pipefail
@@ -70,28 +69,28 @@ jobs:
           echo "--- Checking runtime deps ---"
           
           if ! command -v java > /dev/null 2>&1; then
-            echo "❌ Java não encontrado"; exit 1
+            echo "Java nao encontrado"; exit 1
           fi
           java -version
           
           if ! command -v mvn > /dev/null 2>&1; then
-            echo "❌ Maven não encontrado"; exit 1
+            echo "Maven nao encontrado"; exit 1
           fi
           mvn -v
           
           if ! command -v docker > /dev/null 2>&1; then
-            echo "❌ Docker não encontrado"; exit 1
+            echo "Docker nao encontrado"; exit 1
           fi
           
           if command -v docker compose > /dev/null 2>&1; then
-            echo "✅ docker compose v2 OK"
+            echo "docker compose v2 OK"
           elif command -v docker-compose > /dev/null 2>&1; then
-            echo "✅ docker-compose v1 OK"
+            echo "docker-compose v1 OK"
           else
-            echo "❌ Nem 'docker compose' nem 'docker-compose' encontrados"; exit 1
+            echo "Nem 'docker compose' nem 'docker-compose' encontrados"; exit 1
           fi
           
-          echo "✅ Todas as dependências presentes"
+          echo "Todas as dependencias presentes"
           EOF
 
       - name: Stop systemd service before build
@@ -103,12 +102,12 @@ jobs:
           ssh ${PORT_OPT} -i key.pem "${SSH_USER}@${SSH_HOST}" << EOF
           set -e
           SERVICE_NAME="${SERVICE_NAME}"
-          echo "--- Parando serviço systemd: \${SERVICE_NAME} ---"
+          echo "--- Parando servico systemd: \${SERVICE_NAME} ---"
           if systemctl is-active --quiet "\${SERVICE_NAME}" 2>/dev/null; then
             sudo systemctl stop "\${SERVICE_NAME}"
-            echo "✅ Serviço parado."
+            echo "Servico parado."
           else
-            echo "ℹ️  Serviço não estava ativo."
+            echo "Servico nao estava ativo."
           fi
           EOF
 
@@ -119,7 +118,6 @@ jobs:
           PORT_OPT=""
           if [[ -n "${SSH_PORT:-}" ]]; then PORT_OPT="-p ${SSH_PORT}"; fi
           
-          # Passa variáveis para o SSH
           ssh ${PORT_OPT} -i key.pem "${SSH_USER}@${SSH_HOST}" \
             "REPO_URL='${REPO_URL}'" \
             "REPO_BRANCH='${REPO_BRANCH}'" \
@@ -140,7 +138,6 @@ jobs:
           fi
           
           echo "--- Clonar/Atualizar repo ---"
-          # Configura autenticação se PAT estiver disponível
           if [ -n "${BACKEND_REPO_PAT:-}" ]; then
             REPO_URL_AUTH="https://${BACKEND_REPO_PAT}@${REPO_URL#https://}"
           else
@@ -158,40 +155,35 @@ jobs:
           echo "--- Docker Compose (DB) ---"
           cd "${APP_ROOT}"
           
-          # Verifica se existe docker-compose.yml
           if [ ! -f "${APP_ROOT}/docker-compose.yml" ]; then
-            echo "⚠️  docker-compose.yml não encontrado. Pulando gerenciamento do DB."
+            echo "docker-compose.yml nao encontrado. Pulando gerenciamento do DB."
           else
-            echo "✅ docker-compose.yml encontrado"
+            echo "docker-compose.yml encontrado"
             
-            # Verifica se os containers do projeto já estão rodando via docker ps
             PROJECT_NAME=$(basename "${APP_ROOT}" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]_-')
             
-            # Conta containers rodando que pertencem a este projeto
             RUNNING_CONTAINERS=$(docker ps --filter "label=com.docker.compose.project=${PROJECT_NAME}" --format '{{.Names}}' 2>/dev/null | wc -l)
             
             if [ "${RUNNING_CONTAINERS}" -gt 0 ]; then
-              echo "ℹ️  Detectados ${RUNNING_CONTAINERS} container(s) já rodando para o projeto."
-              echo "ℹ️  Pulando docker-compose up - mantendo containers ativos."
+              echo "Detectados ${RUNNING_CONTAINERS} container(s) ja rodando para o projeto."
+              echo "Pulando docker-compose up - mantendo containers ativos."
               docker ps --filter "label=com.docker.compose.project=${PROJECT_NAME}" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
             else
-              echo "🚀 Nenhum container rodando. Iniciando stack do banco de dados..."
+              echo "Nenhum container rodando. Iniciando stack do banco de dados..."
               
-              # Determina comando do compose e executa
               if docker compose version >/dev/null 2>&1; then
-                echo "📦 Usando: docker compose"
+                echo "Usando: docker compose"
                 docker compose up -d
               elif command -v docker-compose >/dev/null 2>&1; then
-                echo "📦 Usando: docker-compose"
+                echo "Usando: docker-compose"
                 docker-compose up -d
               else
-                echo "❌ Nem 'docker compose' nem 'docker-compose' disponíveis!"
-                echo "⚠️  Continuando sem iniciar DB - pode causar falha na aplicação."
+                echo "Nem 'docker compose' nem 'docker-compose' disponiveis!"
+                echo "Continuando sem iniciar DB - pode causar falha na aplicacao."
               fi
               
-              # Aguarda DB estar pronto
               if [ "${RUNNING_CONTAINERS}" -eq 0 ]; then
-                echo "⏳ Aguardando 15s para DB inicializar..."
+                echo "Aguardando 15s para DB inicializar..."
                 sleep 15
               fi
             fi
@@ -199,74 +191,77 @@ jobs:
           
           echo "--- Build Maven ---"
           cd "${APP_ROOT}"
-          echo "🔨 Executando: mvn clean package"
+          echo "Executando: mvn clean package"
           mvn -B clean package -DskipTests
           
           echo "--- Identificando JAR ---"
           if [ -f "target/${JAR_NAME}" ]; then
             JAR_PATH="$(realpath "target/${JAR_NAME}")"
-            echo "✅ JAR encontrado: ${JAR_PATH}"
+            echo "JAR encontrado: ${JAR_PATH}"
           else
             JAR_PATH="$(ls -1 target/*.jar 2>/dev/null | head -n 1)"
             if [ -z "${JAR_PATH}" ]; then
-              echo "❌ Nenhum JAR encontrado em target/. Build falhou?"
+              echo "Nenhum JAR encontrado em target/. Build falhou?"
               exit 1
             fi
             JAR_PATH="$(realpath "${JAR_PATH}")"
-            echo "⚠️  ${JAR_NAME} não encontrado, usando: ${JAR_PATH}"
+            echo "${JAR_NAME} nao encontrado, usando: ${JAR_PATH}"
           fi
           
-          echo "--- Criando/atualizando serviço systemd: ${SERVICE_NAME} ---"
+          echo "--- Criando/atualizando servico systemd: ${SERVICE_NAME} ---"
           
-          # Cria arquivo temporário com a configuração do serviço
-          cat > /tmp/${SERVICE_NAME}.service << SYSTEMD_EOF
-[Unit]
-Description=Gestao Formativa Backend
-After=network.target docker.service
-
-[Service]
-Type=simple
-User=${RUN_USER}
-WorkingDirectory=${APP_ROOT}
-ExecStart=/usr/bin/java -jar ${JAR_PATH} --server.port=${APP_PORT}
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-SYSTEMD_EOF
+          cat > /tmp/${SERVICE_NAME}.service << 'SYSTEMD_EOF'
+          [Unit]
+          Description=Gestao Formativa Backend
+          After=network.target docker.service
           
-          # Move o arquivo para /etc/systemd/system/ usando sudo
+          [Service]
+          Type=simple
+          User=USER_PLACEHOLDER
+          WorkingDirectory=WORKDIR_PLACEHOLDER
+          ExecStart=/usr/bin/java -jar JAR_PLACEHOLDER --server.port=PORT_PLACEHOLDER
+          Restart=always
+          RestartSec=5
+          StandardOutput=journal
+          StandardError=journal
+          
+          [Install]
+          WantedBy=multi-user.target
+          SYSTEMD_EOF
+          
+          sed -i "s|USER_PLACEHOLDER|${RUN_USER}|g" /tmp/${SERVICE_NAME}.service
+          sed -i "s|WORKDIR_PLACEHOLDER|${APP_ROOT}|g" /tmp/${SERVICE_NAME}.service
+          sed -i "s|JAR_PLACEHOLDER|${JAR_PATH}|g" /tmp/${SERVICE_NAME}.service
+          sed -i "s|PORT_PLACEHOLDER|${APP_PORT}|g" /tmp/${SERVICE_NAME}.service
+          
           sudo mv /tmp/${SERVICE_NAME}.service /etc/systemd/system/${SERVICE_NAME}.service
           sudo chmod 644 /etc/systemd/system/${SERVICE_NAME}.service
           
-          echo "--- Habilitando e iniciando serviço ---"
+          echo "--- Habilitando e iniciando servico ---"
           sudo systemctl daemon-reload
           sudo systemctl enable "${SERVICE_NAME}"
           sudo systemctl restart "${SERVICE_NAME}"
           
-          echo "⏳ Aguardando 5s para aplicação iniciar..."
+          echo "Aguardando 5s para aplicacao iniciar..."
           sleep 5
           
           sudo systemctl status "${SERVICE_NAME}" --no-pager -l || true
           
           echo "--- Health check ---"
           if command -v curl > /dev/null 2>&1; then
-            echo "🔍 Verificando health endpoint..."
+            echo "Verificando health endpoint..."
             if curl -sf "http://localhost:${APP_PORT}/actuator/health" > /dev/null; then
-              echo "✅ Health check OK!"
+              echo "Health check OK!"
             elif curl -sf "http://localhost:${APP_PORT}" > /dev/null; then
-              echo "✅ Aplicação respondendo (sem actuator)!"
+              echo "Aplicacao respondendo (sem actuator)!"
             else
-              echo "⚠️  Aplicação não está respondendo. Verifique os logs."
+              echo "Aplicacao nao esta respondendo. Verifique os logs."
               sudo journalctl -u "${SERVICE_NAME}" -n 30 --no-pager
               exit 1
             fi
           fi
           
-          echo "🎉 Deploy concluído com sucesso!"
+          echo "Deploy concluido com sucesso!"
           DEPLOY_EOF
 
       - name: Cleanup
@@ -279,27 +274,27 @@ SYSTEMD_EOF
         if: failure()
         shell: bash
         run: |
-          echo "❌ Falha no deploy do backend. Verifique:"
+          echo "Falha no deploy do backend. Verifique:"
           echo ""
-          echo "1️⃣  Dependências na VM:"
+          echo "1. Dependencias na VM:"
           echo "   - Docker, Java 17 e Maven instalados"
-          echo "   - Usuário no grupo docker: sudo usermod -aG docker \$USER"
+          echo "   - Usuario no grupo docker: sudo usermod -aG docker \$USER"
           echo ""
-          echo "2️⃣  Rede e Firewall:"
+          echo "2. Rede e Firewall:"
           echo "   - Porta ${APP_PORT} liberada no NSG/firewall"
           echo "   - Docker network configurado corretamente"
           echo ""
-          echo "3️⃣  Permissões:"
-          echo "   - Usuário ${SSH_USER} com acesso ao ${APP_ROOT}"
-          echo "   - Permissões sudo configuradas"
+          echo "3. Permissoes:"
+          echo "   - Usuario ${SSH_USER} com acesso ao ${APP_ROOT}"
+          echo "   - Permissoes sudo configuradas"
           echo ""
-          echo "4️⃣  Repositório:"
+          echo "4. Repositorio:"
           echo "   - Se privado, configure BACKEND_REPO_PAT nos secrets"
           echo ""
-          echo "5️⃣  Logs na VM:"
+          echo "5. Logs na VM:"
           echo "   sudo journalctl -u ${SERVICE_NAME} -n 100 --no-pager"
           echo "   sudo systemctl status ${SERVICE_NAME}"
           echo ""
-          echo "6️⃣  Banco de Dados:"
-          echo "   - Verifique se o docker-compose.yml está correto"
-          echo "   - Confirme que os containers estão rodando: docker ps"
+          echo "6. Banco de Dados:"
+          echo "   - Verifique se o docker-compose.yml esta correto"
+          echo "   - Confirme que os containers estao rodando: docker ps"
