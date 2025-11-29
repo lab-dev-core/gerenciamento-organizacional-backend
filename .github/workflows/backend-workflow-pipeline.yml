@@ -162,8 +162,8 @@ jobs:
               echo "Nenhum JAR encontrado em target/. Verifique o build."
               exit 1
             fi
-            JAR_PATH="$(realpath "${JAR_PATH}")"
-            echo "Aviso: ${JAR_NAME} não encontrado, usando ${JAR_PATH}"
+          JAR_PATH="$(realpath "${JAR_PATH}")"
+          echo "Aviso: ${JAR_NAME} não encontrado, usando ${JAR_PATH}"
           fi
           echo "Usando JAR: ${JAR_PATH}"
           
