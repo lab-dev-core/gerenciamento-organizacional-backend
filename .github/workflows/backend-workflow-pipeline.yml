@@ -81,7 +81,7 @@ jobs:
             fi
           EOF
 
-      - name: Clone/Update repo, build JAR and deploy with systemd
+      - name: Clone/Update repo and build JAR
         shell: bash
         run: |
           set -euo pipefail
@@ -92,8 +92,6 @@ jobs:
             REPO_URL="${REPO_URL}"
             REPO_BRANCH="${REPO_BRANCH}"
             APP_ROOT="${APP_ROOT}"
-            SERVICE_NAME="${SERVICE_NAME}"
-            APP_PORT="${APP_PORT}"
             JAR_NAME="${JAR_NAME}"
             BACKEND_REPO_PAT="${BACKEND_REPO_PAT}"
 
@@ -140,27 +138,47 @@ jobs:
               echo "Aviso: ${JAR_NAME} não encontrado, usando ${JAR_PATH}"
             fi
             echo "Usando JAR: ${JAR_PATH}"
+          EOF
 
-            echo "--- Criando/atualizando serviço systemd: ${SERVICE_NAME} ---"
-            sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null << SYSTEMD
-[Unit]
-Description=Gestao Formativa Backend
-After=network.target
+      - name: Deploy systemd service
+        shell: bash
+        env:
+          JAR_PATH: ${{ env.APP_ROOT }}/target/${{ env.JAR_NAME }}
+        run: |
+          set -euo pipefail
+          PORT_OPT=""
+          if [[ -n "${SSH_PORT:-}" ]]; then PORT_OPT="-p ${SSH_PORT}"; fi
+          
+          # <CHANGE> Heredoc separado para criar o service file corretamente
+          ssh ${PORT_OPT} -i key.pem "${SSH_USER}@${SSH_HOST}" bash << 'DEPLOY_EOF'
+            set -e
+            SERVICE_NAME="gestaoformativa"
+            APP_PORT="8081"
+            APP_ROOT="/home/dev-core/htdocs/app.dev-core.online/gerenciamento-organizacional-backend"
+            SSH_USER="$(whoami)"
+            
+            echo "--- Criando serviço systemd ---"
+            cat > /tmp/gestaoformativa.service << 'SERVICE_FILE'
+            [Unit]
+            Description=Gestao Formativa Backend
+            After=network.target
+            
+            [Service]
+            Type=simple
+            User=${SSH_USER}
+            WorkingDirectory=${APP_ROOT}
+            ExecStart=/usr/bin/java -jar ${JAR_PATH} --server.port=${APP_PORT}
+            Restart=always
+            RestartSec=5
+            StandardOutput=journal
+            StandardError=journal
+            
+            [Install]
+            WantedBy=multi-user.target
+            SERVICE_FILE
 
-[Service]
-Type=simple
-User=${SSH_USER}
-WorkingDirectory=${APP_ROOT}
-ExecStart=/usr/bin/java -jar ${JAR_PATH} --server.port=${APP_PORT}
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-SYSTEMD
-
+            sudo mv /tmp/gestaoformativa.service /etc/systemd/system/gestaoformativa.service
+            
             echo "--- Habilitando, reiniciando e verificando serviço ---"
             sudo systemctl daemon-reload
             sudo systemctl enable "${SERVICE_NAME}"
@@ -168,10 +186,11 @@ SYSTEMD
             sudo systemctl status "${SERVICE_NAME}" --no-pager -l || true
 
             echo "--- Health check ---"
+            sleep 3
             if command -v curl >/dev/null 2>&1; then
               (curl -sS "http://localhost:${APP_PORT}/actuator/health" || curl -sS "http://localhost:${APP_PORT}") || true
             fi
-          EOF
+          DEPLOY_EOF
 
       - name: Troubleshooting on failure
         if: failure()
