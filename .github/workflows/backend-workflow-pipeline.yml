@@ -93,7 +93,7 @@ jobs:
           echo "Todas as dependencias presentes"
           EOF
 
-      - name: Stop systemd service before build
+      - name: Stop and disable systemd service before build
         shell: bash
         run: |
           set -euo pipefail
@@ -102,12 +102,36 @@ jobs:
           ssh ${PORT_OPT} -i key.pem "${SSH_USER}@${SSH_HOST}" << EOF
           set -e
           SERVICE_NAME="${SERVICE_NAME}"
-          echo "--- Parando servico systemd: \${SERVICE_NAME} ---"
-          if systemctl is-active --quiet "\${SERVICE_NAME}" 2>/dev/null; then
-            sudo systemctl stop "\${SERVICE_NAME}"
-            echo "Servico parado."
+          echo "--- Parando e desabilitando servico: \${SERVICE_NAME} ---"
+          
+          # Verifica se o serviço existe
+          if systemctl list-unit-files | grep -q "^\${SERVICE_NAME}.service"; then
+            # Para o serviço se estiver rodando
+            if systemctl is-active --quiet "\${SERVICE_NAME}" 2>/dev/null; then
+              echo "Parando servico ativo..."
+              sudo systemctl stop "\${SERVICE_NAME}"
+            fi
+            
+            # Desabilita para evitar restart automático
+            if systemctl is-enabled --quiet "\${SERVICE_NAME}" 2>/dev/null; then
+              echo "Desabilitando servico..."
+              sudo systemctl disable "\${SERVICE_NAME}"
+            fi
+            
+            # Aguarda um momento para garantir que a porta foi liberada
+            echo "Aguardando porta ${APP_PORT} ser liberada..."
+            sleep 2
+            
+            # Verifica se a porta ainda está em uso
+            if sudo lsof -i :${APP_PORT} 2>/dev/null | grep -q LISTEN; then
+              echo "AVISO: Porta ${APP_PORT} ainda em uso. Forcando kill do processo..."
+              sudo lsof -ti :${APP_PORT} | xargs -r sudo kill -9
+              sleep 1
+            fi
+            
+            echo "Servico parado e porta liberada."
           else
-            echo "Servico nao estava ativo."
+            echo "Servico ainda nao existe - primeira instalacao."
           fi
           EOF
 
@@ -236,6 +260,19 @@ jobs:
           
           sudo mv /tmp/${SERVICE_NAME}.service /etc/systemd/system/${SERVICE_NAME}.service
           sudo chmod 644 /etc/systemd/system/${SERVICE_NAME}.service
+          
+          echo "--- Verificando se porta esta livre ---"
+          if sudo lsof -i :${APP_PORT} 2>/dev/null | grep -q LISTEN; then
+            echo "ERRO: Porta ${APP_PORT} ainda em uso!"
+            echo "Processos usando a porta:"
+            sudo lsof -i :${APP_PORT}
+            echo ""
+            echo "Forcando kill do processo..."
+            sudo lsof -ti :${APP_PORT} | xargs -r sudo kill -9
+            sleep 2
+          else
+            echo "Porta ${APP_PORT} livre."
+          fi
           
           echo "--- Habilitando e iniciando servico ---"
           sudo systemctl daemon-reload
