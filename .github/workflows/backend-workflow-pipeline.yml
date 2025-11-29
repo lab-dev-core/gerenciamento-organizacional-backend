@@ -104,7 +104,7 @@ jobs:
           set -e
           SERVICE_NAME="${SERVICE_NAME}"
           echo "--- Parando serviço systemd: \${SERVICE_NAME} ---"
-          if systemctl is-active --quiet "\${SERVICE_NAME}"; then
+          if systemctl is-active --quiet "\${SERVICE_NAME}" 2>/dev/null; then
             sudo systemctl stop "\${SERVICE_NAME}"
             echo "✅ Serviço parado."
           else
@@ -217,24 +217,30 @@ jobs:
           fi
           
           echo "--- Criando/atualizando serviço systemd: ${SERVICE_NAME} ---"
-          sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null << SYSTEMD_EOF
-          [Unit]
-          Description=Gestao Formativa Backend
-          After=network.target docker.service
           
-          [Service]
-          Type=simple
-          User=${RUN_USER}
-          WorkingDirectory=${APP_ROOT}
-          ExecStart=/usr/bin/java -jar ${JAR_PATH} --server.port=${APP_PORT}
-          Restart=always
-          RestartSec=5
-          StandardOutput=journal
-          StandardError=journal
+          # Cria arquivo temporário com a configuração do serviço
+          cat > /tmp/${SERVICE_NAME}.service << SYSTEMD_EOF
+[Unit]
+Description=Gestao Formativa Backend
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=${RUN_USER}
+WorkingDirectory=${APP_ROOT}
+ExecStart=/usr/bin/java -jar ${JAR_PATH} --server.port=${APP_PORT}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD_EOF
           
-          [Install]
-          WantedBy=multi-user.target
-          SYSTEMD_EOF
+          # Move o arquivo para /etc/systemd/system/ usando sudo
+          sudo mv /tmp/${SERVICE_NAME}.service /etc/systemd/system/${SERVICE_NAME}.service
+          sudo chmod 644 /etc/systemd/system/${SERVICE_NAME}.service
           
           echo "--- Habilitando e iniciando serviço ---"
           sudo systemctl daemon-reload
