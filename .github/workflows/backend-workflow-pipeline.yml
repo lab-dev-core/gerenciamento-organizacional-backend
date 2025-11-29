@@ -183,8 +183,8 @@ jobs:
               fi
               
               if [ "${RUNNING_CONTAINERS}" -eq 0 ]; then
-                echo "Aguardando 15s para DB inicializar..."
-                sleep 15
+                echo "Aguardando 10s para DB inicializar..."
+                sleep 10
               fi
             fi
           fi
@@ -242,23 +242,68 @@ jobs:
           sudo systemctl enable "${SERVICE_NAME}"
           sudo systemctl restart "${SERVICE_NAME}"
           
-          echo "Aguardando 5s para aplicacao iniciar..."
-          sleep 5
+          echo "Aguardando aplicacao inicializar..."
+          sleep 3
           
           sudo systemctl status "${SERVICE_NAME}" --no-pager -l || true
           
-          echo "--- Health check ---"
+          echo ""
+          echo "--- Health check com retentativas ---"
           if command -v curl > /dev/null 2>&1; then
-            echo "Verificando health endpoint..."
-            if curl -sf "http://localhost:${APP_PORT}/actuator/health" > /dev/null; then
-              echo "Health check OK!"
-            elif curl -sf "http://localhost:${APP_PORT}" > /dev/null; then
-              echo "Aplicacao respondendo (sem actuator)!"
+            MAX_ATTEMPTS=30
+            ATTEMPT=1
+            HEALTH_OK=false
+            
+            echo "Tentando conectar na aplicacao (max ${MAX_ATTEMPTS} tentativas, intervalo 2s)..."
+            
+            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+              echo -n "Tentativa $ATTEMPT/$MAX_ATTEMPTS... "
+              
+              # Tenta actuator/health primeiro
+              if curl -sf --connect-timeout 2 "http://localhost:${APP_PORT}/actuator/health" > /dev/null 2>&1; then
+                echo "Health check OK!"
+                HEALTH_OK=true
+                break
+              # Tenta endpoint raiz
+              elif curl -sf --connect-timeout 2 "http://localhost:${APP_PORT}" > /dev/null 2>&1; then
+                echo "Aplicacao respondendo!"
+                HEALTH_OK=true
+                break
+              # Verifica se o processo ainda está rodando
+              elif ! systemctl is-active --quiet "${SERVICE_NAME}"; then
+                echo "FALHOU - servico parou!"
+                echo ""
+                echo "Logs do servico:"
+                sudo journalctl -u "${SERVICE_NAME}" -n 50 --no-pager
+                exit 1
+              else
+                echo "aguardando..."
+                sleep 2
+                ATTEMPT=$((ATTEMPT + 1))
+              fi
+            done
+            
+            if [ "$HEALTH_OK" = true ]; then
+              echo ""
+              echo "==================================="
+              echo "Deploy concluido com sucesso!"
+              echo "Aplicacao rodando na porta ${APP_PORT}"
+              echo "==================================="
             else
-              echo "Aplicacao nao esta respondendo. Verifique os logs."
-              sudo journalctl -u "${SERVICE_NAME}" -n 30 --no-pager
-              exit 1
+              echo ""
+              echo "AVISO: Aplicacao nao respondeu apos ${MAX_ATTEMPTS} tentativas (60s)."
+              echo "O servico esta rodando, mas pode estar inicializando ainda."
+              echo ""
+              echo "Ultimos logs:"
+              sudo journalctl -u "${SERVICE_NAME}" -n 50 --no-pager
+              echo ""
+              echo "Verifique manualmente com:"
+              echo "  sudo systemctl status ${SERVICE_NAME}"
+              echo "  sudo journalctl -u ${SERVICE_NAME} -f"
+              echo "  curl http://localhost:${APP_PORT}/actuator/health"
             fi
+          else
+            echo "curl nao disponivel - pulando health check"
           fi
           
           echo "Deploy concluido com sucesso!"
