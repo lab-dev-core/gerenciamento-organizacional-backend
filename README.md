@@ -1,3 +1,6 @@
+### Repositorio com workflow ativo, apos cada commit a aplicação automaticamente atualiza e reinicia o servico
+- GitHub Workflow
+
 ### Pipeline build back via VM
 
 - Clonar repositorio: git clone https://github.com/lab-dev-core/gerenciamento-organizacional-frontend.git
