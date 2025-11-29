@@ -14,15 +14,15 @@ jobs:
     env:
       SSH_HOST: ${{ secrets.AZURE_HOST }}
       SSH_USER: ${{ secrets.AZURE_USER }}
-      SSH_PORT: ${{ secrets.AZURE_PORT }}                    # opcional (se usa porta custom)
+      SSH_PORT: ${{ secrets.AZURE_PORT }}  # opcional (se usa porta custom)
       REPO_URL: https://github.com/lab-dev-core/gerenciamento-organizacional-backend.git
       REPO_BRANCH: main
       APP_ROOT: /home/dev-core/htdocs/app.dev-core.online/gerenciamento-organizacional-backend
       SERVICE_NAME: gestaoformativa
       APP_PORT: "8081"
       JAR_NAME: gestaoFormativa-0.0.1-SNAPSHOT.jar
-      JAVA_VERSION: "17"                                     # ajuste conforme sua VM
-      BACKEND_REPO_PAT: ${{ secrets.BACKEND_REPO_PAT }}      # opcional: para repo privado futuramente
+      JAVA_VERSION: "17"
+      BACKEND_REPO_PAT: ${{ secrets.BACKEND_REPO_PAT }}  # opcional para repo privado
 
     steps:
       - name: Checkout (optional)
@@ -32,12 +32,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for var in AZURE_HOST AZURE_USER AZURE_SSH_KEY; do
-            if [[ -z "${{ secrets[format('{0}', var)] }}" ]]; then
-              echo "ERROR: Secret $var não está definido."
-              exit 1
-            fi
-          done
+          if [[ -z "${{ secrets.AZURE_HOST }}" || -z "${{ secrets.AZURE_USER }}" || -z "${{ secrets.AZURE_SSH_KEY }}" ]]; then
+            echo "ERROR: Defina os secrets AZURE_HOST, AZURE_USER e AZURE_SSH_KEY."
+            exit 1
+          fi
           echo "Secrets obrigatórios presentes."
 
       - name: Prepare SSH key & known_hosts
@@ -93,7 +91,7 @@ jobs:
             fi
           EOF
 
-      - name: Clone/Update repo, manage DB with Compose (no restart if already running), build JAR, systemd deploy
+      - name: Clone/Update repo, manage DB (no restart if running), build JAR, systemd deploy
         shell: bash
         run: |
           set -euo pipefail
@@ -110,6 +108,7 @@ jobs:
             APP_PORT="${APP_PORT}"
             JAR_NAME="${JAR_NAME}"
             BACKEND_REPO_PAT="${BACKEND_REPO_PAT}"
+            RUN_USER="${SSH_USER}"
 
             echo "--- Garantir APP_ROOT: \${APP_ROOT} ---"
             if [ ! -d "\${APP_ROOT}" ]; then
@@ -121,7 +120,8 @@ jobs:
             if [ ! -d "\${APP_ROOT}/.git" ]; then
               if [ -n "\${BACKEND_REPO_PAT}" ]; then
                 echo "Repo privado (futuro): usando PAT"
-                git -c http.extraHeader="Authorization: token \${BACKEND_REPO_PAT}" clone -b "\${REPO_BRANCH}" "\${REPO_URL}" "\${APP_ROOT}"
+                git -c http.extraHeader="Authorization: token \${BACKEND_REPO_PAT}" \
+                    clone -b "\${REPO_BRANCH}" "\${REPO_URL}" "\${APP_ROOT}"
               else
                 git clone -b "\${REPO_BRANCH}" "\${REPO_URL}" "\${APP_ROOT}"
               fi
@@ -148,8 +148,8 @@ jobs:
               echo "Compose encontrado em \${APP_ROOT}/docker-compose.yml"
               # Detecta se já há containers ativos dessa stack
               if \${USE_COMPOSE} ps -q | grep -q .; then
-                echo "Stack já está rodando — não reiniciaremos no workflow."
-                # Se quiser forçar atualização sem restart, comente:
+                echo "Stack já está rodando — NÃO vamos reiniciar."
+                # Se quiser atualizar sem derrubar, comente a linha abaixo (atualiza imagens/serviços sem deps):
                 # \${USE_COMPOSE} up -d --no-deps --build
               else
                 echo "Stack não está rodando — executando 'compose up -d'"
@@ -219,4 +219,3 @@ SVC
           echo "2) Permissões de ${SSH_USER} (grupo docker, acesso ao APP_ROOT)."
           echo "3) Porta ${APP_PORT} liberada no firewall/NSG."
           echo "4) Se repo for privado, configure o secret BACKEND_REPO_PAT."
-          echo "5) Logs do serviço: 'journalctl -u ${SERVICE_NAME} -f'."
