@@ -158,32 +158,43 @@ jobs:
           echo "--- Docker Compose (DB) ---"
           cd "${APP_ROOT}"
           
-          # Determina comando do compose
-          if command -v docker compose > /dev/null 2>&1; then
-            COMPOSE_CMD="docker compose"
-          elif command -v docker-compose > /dev/null 2>&1; then
-            COMPOSE_CMD="docker-compose"
+          # Verifica se existe docker-compose.yml
+          if [ ! -f "${APP_ROOT}/docker-compose.yml" ]; then
+            echo "⚠️  docker-compose.yml não encontrado. Pulando gerenciamento do DB."
           else
-            echo "⚠️  Docker compose não encontrado. Pulando stack DB."
-            COMPOSE_CMD=""
-          fi
-          
-          if [ -f "${APP_ROOT}/docker-compose.yml" ] && [ -n "${COMPOSE_CMD}" ]; then
             echo "✅ docker-compose.yml encontrado"
             
-            # Verifica se containers já estão rodando
-            if ${COMPOSE_CMD} ps 2>/dev/null | grep -q "Up"; then
-              echo "ℹ️  Stack já está rodando — mantendo containers ativos."
+            # Verifica se os containers do projeto já estão rodando via docker ps
+            PROJECT_NAME=$(basename "${APP_ROOT}" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]_-')
+            
+            # Conta containers rodando que pertencem a este projeto
+            RUNNING_CONTAINERS=$(docker ps --filter "label=com.docker.compose.project=${PROJECT_NAME}" --format '{{.Names}}' 2>/dev/null | wc -l)
+            
+            if [ "${RUNNING_CONTAINERS}" -gt 0 ]; then
+              echo "ℹ️  Detectados ${RUNNING_CONTAINERS} container(s) já rodando para o projeto."
+              echo "ℹ️  Pulando docker-compose up - mantendo containers ativos."
+              docker ps --filter "label=com.docker.compose.project=${PROJECT_NAME}" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
             else
-              echo "🚀 Iniciando stack do banco de dados..."
-              ${COMPOSE_CMD} up -d
+              echo "🚀 Nenhum container rodando. Iniciando stack do banco de dados..."
               
-              # Aguarda DB estar pronto (ajuste conforme seu compose)
-              echo "⏳ Aguardando 10s para DB inicializar..."
-              sleep 10
+              # Determina comando do compose e executa
+              if docker compose version >/dev/null 2>&1; then
+                echo "📦 Usando: docker compose"
+                docker compose up -d
+              elif command -v docker-compose >/dev/null 2>&1; then
+                echo "📦 Usando: docker-compose"
+                docker-compose up -d
+              else
+                echo "❌ Nem 'docker compose' nem 'docker-compose' disponíveis!"
+                echo "⚠️  Continuando sem iniciar DB - pode causar falha na aplicação."
+              fi
+              
+              # Aguarda DB estar pronto
+              if [ "${RUNNING_CONTAINERS}" -eq 0 ]; then
+                echo "⏳ Aguardando 15s para DB inicializar..."
+                sleep 15
+              fi
             fi
-          else
-            echo "⚠️  docker-compose.yml não encontrado ou compose indisponível."
           fi
           
           echo "--- Build Maven ---"
