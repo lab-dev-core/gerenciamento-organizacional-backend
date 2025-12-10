@@ -12,7 +12,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class MissionLocation {
+public class MissionLocation extends TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

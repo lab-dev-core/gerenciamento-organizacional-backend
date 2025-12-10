@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 
 @Data
 @NoArgsConstructor
@@ -16,4 +17,7 @@ public class LoginRequest {
 
     @NotBlank(message = "A senha não pode estar em branco")
     private String password;
+
+    @NotNull(message = "O ID do tenant é obrigatório")
+    private Long tenantId;
 }

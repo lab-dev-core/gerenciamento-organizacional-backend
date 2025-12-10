@@ -51,4 +51,10 @@ public interface FormativeDocumentRepository extends JpaRepository<FormativeDocu
     List<FormativeDocument> findUnreadDocumentsForUser(@Param("user") User user);
 
     long countByDocumentType(FormativeDocument.DocumentType documentType);
+
+    // SaaS multi-tenancy support
+    long countByTenantId(Long tenantId);
+
+    @Query("SELECT COALESCE(SUM(LENGTH(d.attachmentData)), 0) FROM FormativeDocument d WHERE d.tenantId = :tenantId")
+    long sumAttachmentSizeByTenantId(@Param("tenantId") Long tenantId);
 }

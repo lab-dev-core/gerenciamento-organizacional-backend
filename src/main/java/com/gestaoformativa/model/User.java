@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User implements UserDetails {
+public class User extends TenantAware implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

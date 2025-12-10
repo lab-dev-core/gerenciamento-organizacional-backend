@@ -11,7 +11,7 @@ import java.time.LocalDate;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class FormativeStage {
+public class FormativeStage extends TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

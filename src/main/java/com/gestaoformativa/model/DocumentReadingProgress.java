@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DocumentReadingProgress {
+public class DocumentReadingProgress extends TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

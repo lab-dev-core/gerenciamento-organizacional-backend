@@ -11,7 +11,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DocumentCategory {
+public class DocumentCategory extends TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
