@@ -13,7 +13,7 @@ import java.util.Set;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class FormativeDocument {
+public class FormativeDocument extends TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

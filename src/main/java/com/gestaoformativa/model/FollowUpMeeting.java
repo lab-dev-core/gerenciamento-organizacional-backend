@@ -13,7 +13,7 @@ import java.util.Set;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class FollowUpMeeting {
+public class FollowUpMeeting extends TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

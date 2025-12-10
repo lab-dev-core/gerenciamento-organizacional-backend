@@ -12,7 +12,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Role {
+public class Role extends TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

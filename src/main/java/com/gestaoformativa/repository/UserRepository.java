@@ -39,4 +39,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u JOIN u.role r WHERE r.canManageDocuments = true")
     List<User> findUsersWhoCanManageDocuments();
+
+    // SaaS multi-tenancy support
+    long countByTenantId(Long tenantId);
 }
