@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "users")
+@EntityListeners(com.gestaoformativa.config.TenantEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,6 +26,9 @@ public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "tenant_id")
+    private Long tenantId;
 
     @Column(nullable = false, unique = true)
     private String username;

@@ -1,9 +1,13 @@
 package com.gestaoformativa.config;
 
+import com.gestaoformativa.context.TenantContext;
 import com.gestaoformativa.model.Role;
+import com.gestaoformativa.model.Tenant;
+import com.gestaoformativa.model.TenantStatus;
 import com.gestaoformativa.model.User;
 import com.gestaoformativa.model.User.LifeStage;
 import com.gestaoformativa.repository.RoleRepository;
+import com.gestaoformativa.repository.TenantRepository;
 import com.gestaoformativa.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +16,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Component
@@ -21,19 +26,50 @@ public class DataInitializer implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
     public void run(ApplicationArguments args) {
         log.info("Iniciando configuração de dados padrão...");
 
-        // Criar role de ADMIN
-        Role adminRole = createAdminRoleIfNotExists();
+        // Criar tenant padrão se não existir
+        Tenant defaultTenant = createDefaultTenantIfNotExists();
 
-        // Criar usuário admin
-        createAdminUserIfNotExists(adminRole);
+        // Configurar o tenant no contexto para a inicialização
+        TenantContext.setTenantId(defaultTenant.getId());
 
-        log.info("Configuração de dados padrão concluída!");
+        try {
+            // Criar role de ADMIN
+            Role adminRole = createAdminRoleIfNotExists();
+
+            // Criar usuário admin
+            createAdminUserIfNotExists(adminRole);
+
+            log.info("Configuração de dados padrão concluída!");
+        } finally {
+            // Limpar o contexto após a inicialização
+            TenantContext.clear();
+        }
+    }
+
+    private Tenant createDefaultTenantIfNotExists() {
+        Optional<Tenant> existingTenant = tenantRepository.findBySubdomain("default");
+
+        if (existingTenant.isPresent()) {
+            log.info("Tenant padrão já existe");
+            return existingTenant.get();
+        }
+
+        Tenant defaultTenant = new Tenant();
+        defaultTenant.setName("Sistema Padrão");
+        defaultTenant.setSubdomain("default");
+        defaultTenant.setStatus(TenantStatus.ACTIVE);
+        defaultTenant.setCreatedAt(LocalDateTime.now());
+
+        Tenant savedTenant = tenantRepository.save(defaultTenant);
+        log.info("Tenant padrão criado com sucesso!");
+        return savedTenant;
     }
 
     private Role createAdminRoleIfNotExists() {
